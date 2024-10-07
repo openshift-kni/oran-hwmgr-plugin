@@ -21,37 +21,54 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/controller"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 )
 
 // Setup the Loopback Adaptor
 type DellHwMgrAdaptor struct {
 	client.Client
-	logger    *slog.Logger
-	namespace string
+	Scheme    *runtime.Scheme
+	Logger    *slog.Logger
+	Namespace string
+	AdaptorID pluginv1alpha1.HardwareManagerAdaptorID
 }
 
-func NewDellHwMgrAdaptor(client client.Client, logger *slog.Logger, namespace string) *DellHwMgrAdaptor {
+func NewDellHwMgrAdaptor(client client.Client, scheme *runtime.Scheme, logger *slog.Logger, namespace string) *DellHwMgrAdaptor {
 	return &DellHwMgrAdaptor{
 		Client:    client,
-		logger:    logger,
-		namespace: namespace,
+		Scheme:    scheme,
+		Logger:    logger.With("adaptor", "dell-hwmgr"),
+		Namespace: namespace,
 	}
 }
 
-func (a *DellHwMgrAdaptor) SetupAdaptor() error {
-	a.logger.Info("SetupAdaptor called for DellHwMgr")
+func (a *DellHwMgrAdaptor) SetupAdaptor(mgr ctrl.Manager) error {
+	a.Logger.Info("SetupAdaptor called for DellHwMgr")
+
+	if err := (&controller.HardwareManagerReconciler{
+		Client:    a.Client,
+		Scheme:    a.Scheme,
+		Logger:    a.Logger,
+		Namespace: a.Namespace,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to setup dell-hwmgr adaptor: %w", err)
+	}
+
 	return nil
 }
 
-func (a *DellHwMgrAdaptor) HandleNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
+func (a *DellHwMgrAdaptor) HandleNodePool(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
 	result := utils.DoNotRequeue()
 
-	a.logger.Error("DellHwMgr is not yet implemented")
+	a.Logger.Error("DellHwMgr is not yet implemented")
 	if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
 		hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
 		"Unsupported hwmgr adaptor: dell-hwmgr is not yet implemented"); err != nil {
@@ -62,8 +79,8 @@ func (a *DellHwMgrAdaptor) HandleNodePool(ctx context.Context, nodepool *hwmgmtv
 	return result, nil
 }
 
-func (a *DellHwMgrAdaptor) HandleNodePoolDeletion(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
-	a.logger.InfoContext(ctx, "DellHwMgr HandleNodePoolDeletion", "name", nodepool.Name)
+func (a *DellHwMgrAdaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) error {
+	a.Logger.InfoContext(ctx, "DellHwMgr HandleNodePoolDeletion", "name", nodepool.Name)
 
 	return nil
 }

@@ -135,7 +135,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241006132612-0dc417d8993a
+# github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241009152547-3759d0480774
 ## explicit; go 1.21
 github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
 # github.com/pkg/errors v0.9.1

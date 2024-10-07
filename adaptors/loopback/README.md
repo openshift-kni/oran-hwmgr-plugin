@@ -50,7 +50,7 @@ To watch the Loopback Adaptor logs, run the following command:
 oc logs -n oran-hwmgr-plugin -l control-plane=controller-manager -f
 ```
 
-The [examples/nodelist-generator.sh](examples/nodelist-generator.sh) script can be used to generate a `nodelist` configmap with
+The [examples/nodelist-generator.sh](examples/nodelist-generator.sh) script can be used to generate a `loopback-adaptor-nodelist` configmap with
 user-defined hardware profiles and any number of nodes.
 
 Example test NodePool CRs can also be found in the [examples](examples) folder.
@@ -60,7 +60,7 @@ $ ./examples/nodelist-generator.sh \
     --profile profile-spr-single-processor-64G:dummy-sp-64g:5 \
 	--profile profile-spr-dual-processor-128G:dummy-dp-128g:3 \
 	| oc create -f -
-configmap/nodelist created
+configmap/loopback-adaptor-nodelist created
 
 $ oc create -f examples/np1.yaml
 nodepool.o2ims-hardwaremanagement.oran.openshift.io/np1 created
@@ -71,7 +71,7 @@ kind: NodePool
 metadata:
   creationTimestamp: "2024-09-18T17:29:00Z"
   finalizers:
-  - oran-hwmgr-plugin.oran.openshift.io/nodepool-finalizer
+  - oran-hwmgr-plugin/nodepool-finalizer
   generation: 1
   name: np1
   namespace: oran-hwmgr-plugin
@@ -129,7 +129,7 @@ status:
     macAddress: c6:b6:13:a0:02:01
     name: eth0
 
-$ oc get configmap -n oran-hwmgr-plugin nodelist -o yaml
+$ oc get configmap -n oran-hwmgr-plugin loopback-adaptor-nodelist -o yaml
 apiVersion: v1
 data:
   allocations: |
@@ -234,7 +234,7 @@ data:
 kind: ConfigMap
 metadata:
   creationTimestamp: "2024-09-18T17:28:38Z"
-  name: nodelist
+  name: loopback-adaptor-nodelist
   namespace: oran-hwmgr-plugin
   resourceVersion: "15829"
   uid: e6dfe91c-0713-46d2-b3e5-b883c3d8b8c5

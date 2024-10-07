@@ -36,10 +36,10 @@ import (
 // NodePoolReconciler reconciles a NodePool object
 type NodePoolReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Logger    *slog.Logger
-	Namespace string
-	hwmgr     *adaptors.HwMgrAdaptorController
+	Scheme       *runtime.Scheme
+	Logger       *slog.Logger
+	Namespace    string
+	HwMgrAdaptor *adaptors.HwMgrAdaptorController
 }
 
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;update;patch
@@ -82,7 +82,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		// Handle deletion
 		r.Logger.InfoContext(ctx, "Nodepool is being deleted", slog.String("name", nodepool.Name))
 		if controllerutil.ContainsFinalizer(nodepool, utils.NodepoolFinalizer) {
-			if err := r.hwmgr.HandleNodePoolDeletion(ctx, nodepool); err != nil {
+			if err := r.HwMgrAdaptor.HandleNodePoolDeletion(ctx, nodepool); err != nil {
 				return ctrl.Result{}, fmt.Errorf("finalizer failed: %w", err)
 			}
 
@@ -104,7 +104,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}
 
 	// Hand off the CR to the adaptor
-	result, err = r.hwmgr.HandleNodePool(ctx, nodepool)
+	result, err = r.HwMgrAdaptor.HandleNodePool(ctx, nodepool)
 	if err != nil {
 		err = fmt.Errorf("failed HandleNodePool: %w", err)
 		return
@@ -115,12 +115,6 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if hwmgr, err := adaptors.NewHwMgrAdaptorController(r.Client, r.Logger, r.Namespace); err != nil {
-		return fmt.Errorf("failed to create HwMgrService: %w", err)
-	} else {
-		r.hwmgr = hwmgr
-	}
-
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&hwmgmtv1alpha1.NodePool{}).
 		Complete(r); err != nil {

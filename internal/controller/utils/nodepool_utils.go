@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-const NodepoolFinalizer = "oran-hwmgr-plugin.oran.openshift.io/nodepool-finalizer"
+const NodepoolFinalizer = "oran-hwmgr-plugin/nodepool-finalizer"
 
 func GetNodePoolProvisionedCondition(nodepool *hwmgmtv1alpha1.NodePool) *metav1.Condition {
 	return meta.FindStatusCondition(

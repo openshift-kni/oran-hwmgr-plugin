@@ -19,8 +19,10 @@ package loopback
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,10 +31,14 @@ import (
 )
 
 // CheckNodePoolProgress checks to see if a NodePool is fully allocated, allocating additional resources as needed
-func (a *LoopbackAdaptor) CheckNodePoolProgress(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (full bool, err error) {
+func (a *LoopbackAdaptor) CheckNodePoolProgress(
+	ctx context.Context,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool) (full bool, err error) {
+
 	cloudID := nodepool.Spec.CloudID
 
-	if full, err = a.IsNodePoolFullyAllocated(ctx, nodepool); err != nil {
+	if full, err = a.IsNodePoolFullyAllocated(ctx, hwmgr, nodepool); err != nil {
 		err = fmt.Errorf("failed to check nodepool allocation: %w", err)
 		return
 	} else if full {
@@ -41,7 +47,7 @@ func (a *LoopbackAdaptor) CheckNodePoolProgress(ctx context.Context, nodepool *h
 	}
 
 	for _, nodegroup := range nodepool.Spec.NodeGroup {
-		a.logger.InfoContext(ctx, "Allocating node for CheckNodePoolProgress request:",
+		a.Logger.InfoContext(ctx, "Allocating node for CheckNodePoolProgress request:",
 			"cloudID", cloudID,
 			"nodegroup name", nodegroup.Name,
 		)
@@ -56,14 +62,17 @@ func (a *LoopbackAdaptor) CheckNodePoolProgress(ctx context.Context, nodepool *h
 }
 
 func (a *LoopbackAdaptor) HandleNodePoolCreate(
-	ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
+	ctx context.Context,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
+
 	conditionType := hwmgmtv1alpha1.Provisioned
 	var conditionReason hwmgmtv1alpha1.ConditionReason
 	var conditionStatus metav1.ConditionStatus
 	var message string
 
-	if err := a.ProcessNewNodePool(ctx, nodepool); err != nil {
-		a.logger.Error("failed createNodePool", "err", err)
+	if err := a.ProcessNewNodePool(ctx, hwmgr, nodepool); err != nil {
+		a.Logger.Error("failed createNodePool", "err", err)
 		conditionReason = hwmgmtv1alpha1.Failed
 		conditionStatus = metav1.ConditionFalse
 		message = "Creation request failed: " + err.Error()
@@ -83,8 +92,11 @@ func (a *LoopbackAdaptor) HandleNodePoolCreate(
 }
 
 func (a *LoopbackAdaptor) HandleNodePoolProcessing(
-	ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
-	full, err := a.CheckNodePoolProgress(ctx, nodepool)
+	ctx context.Context,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
+
+	full, err := a.CheckNodePoolProgress(ctx, hwmgr, nodepool)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed CheckNodePoolProgress: %w", err)
 	}
@@ -103,7 +115,7 @@ func (a *LoopbackAdaptor) HandleNodePoolProcessing(
 	var result ctrl.Result
 
 	if full {
-		a.logger.InfoContext(ctx, "NodePool request is fully allocated, name="+nodepool.Name)
+		a.Logger.InfoContext(ctx, "NodePool request is fully allocated, name="+nodepool.Name)
 
 		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
@@ -113,7 +125,7 @@ func (a *LoopbackAdaptor) HandleNodePoolProcessing(
 
 		result = utils.DoNotRequeue()
 	} else {
-		a.logger.InfoContext(ctx, "NodePool request in progress, name="+nodepool.Name)
+		a.Logger.InfoContext(ctx, "NodePool request in progress, name="+nodepool.Name)
 		result = utils.RequeueWithShortInterval()
 	}
 
@@ -121,11 +133,15 @@ func (a *LoopbackAdaptor) HandleNodePoolProcessing(
 }
 
 // ProcessNewNodePool processes a new NodePool CR, verifying that there are enough free resources to satisfy the request
-func (a *LoopbackAdaptor) ProcessNewNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
+func (a *LoopbackAdaptor) ProcessNewNodePool(ctx context.Context,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool) error {
+
 	cloudID := nodepool.Spec.CloudID
 
-	a.logger.InfoContext(ctx, "Processing ProcessNewNodePool request:",
-		"cloudID", cloudID,
+	a.Logger.InfoContext(ctx, "Processing ProcessNewNodePool request:",
+		slog.String("loopback additional-info", hwmgr.Spec.LoopbackData.AddtionalInfo),
+		slog.String("cloudID", cloudID),
 	)
 
 	_, resources, allocations, err := a.GetCurrentResources(ctx)
@@ -144,7 +160,10 @@ func (a *LoopbackAdaptor) ProcessNewNodePool(ctx context.Context, nodepool *hwmg
 }
 
 // IsNodePoolFullyAllocated checks to see if a NodePool CR has been fully allocated
-func (a *LoopbackAdaptor) IsNodePoolFullyAllocated(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
+func (a *LoopbackAdaptor) IsNodePoolFullyAllocated(ctx context.Context,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
+
 	cloudID := nodepool.Spec.CloudID
 
 	_, resources, allocations, err := a.GetCurrentResources(ctx)
@@ -170,7 +189,7 @@ func (a *LoopbackAdaptor) IsNodePoolFullyAllocated(ctx context.Context, nodepool
 		remaining := nodegroup.Size - len(used)
 		if remaining <= 0 {
 			// This group is allocated
-			a.logger.InfoContext(ctx, "nodegroup is fully allocated", "nodegroup", nodegroup.Name)
+			a.Logger.InfoContext(ctx, "nodegroup is fully allocated", "nodegroup", nodegroup.Name)
 			continue
 		}
 
@@ -187,10 +206,13 @@ func (a *LoopbackAdaptor) IsNodePoolFullyAllocated(ctx context.Context, nodepool
 }
 
 // ReleaseNodePool frees resources allocated to a NodePool
-func (a *LoopbackAdaptor) ReleaseNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
+func (a *LoopbackAdaptor) ReleaseNodePool(ctx context.Context,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool) error {
+
 	cloudID := nodepool.Spec.CloudID
 
-	a.logger.InfoContext(ctx, "Processing ReleaseNodePool request:",
+	a.Logger.InfoContext(ctx, "Processing ReleaseNodePool request:",
 		"cloudID", cloudID,
 	)
 
@@ -208,7 +230,7 @@ func (a *LoopbackAdaptor) ReleaseNodePool(ctx context.Context, nodepool *hwmgmtv
 	}
 
 	if index == -1 {
-		a.logger.InfoContext(ctx, "no allocated nodes found", "cloudID", cloudID)
+		a.Logger.InfoContext(ctx, "no allocated nodes found", "cloudID", cloudID)
 		return nil
 	}
 

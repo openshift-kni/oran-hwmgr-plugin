@@ -8,7 +8,39 @@ metadata:
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: HardwareManager is the Schema for the hardwaremanagers API
+      displayName: Hardware Manager
+      kind: HardwareManager
+      name: hardwaremanagers.hwmgr-plugin.oran.openshift.io
+      resources:
+      - kind: Service
+        name: policy-engine-service
+        version: v1
+      specDescriptors:
+      - description: The adaptor ID
+        displayName: Adaptor ID
+        path: adaptor-id
+      - description: Config data for an instance of the dell-hwmgr adaptor
+        displayName: Dell Data
+        path: dell-data
+      - description: The username for connection to the Dell Hardware Manager
+        displayName: User
+        path: dell-data.user
+      - description: Config data for an instance of the loopback adaptor
+        displayName: Loopback Data
+        path: loopback-data
+      - description: A test string
+        displayName: Addtional Info
+        path: loopback-data.additional-info
+      statusDescriptors:
+      - description: Conditions describe the state of the UpdateService resource.
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
+      version: v1alpha1
   description: O-Cloud Hardware Manager Plugin
   displayName: O-Cloud Hardware Manager Plugin
   icon:
@@ -37,6 +69,7 @@ spec:
   - email: dpenney@redhat.com
     name: Don Penney
   maturity: alpha
+  minKubeVersion: 1.28.0
   provider:
     name: Red Hat
   version: 0.0.0

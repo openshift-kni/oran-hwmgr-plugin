@@ -17,4 +17,13 @@ resources:
   group: o2ims-hardwaremanagement
   kind: NodePool
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: oran.openshift.io
+  group: hwmgr-plugin
+  kind: HardwareManager
+  path: github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1
+  version: v1alpha1
 version: "3"

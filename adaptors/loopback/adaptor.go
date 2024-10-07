@@ -21,10 +21,13 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/loopback/controller"
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -32,20 +35,33 @@ import (
 // Setup the Loopback Adaptor
 type LoopbackAdaptor struct {
 	client.Client
-	logger    *slog.Logger
-	namespace string
+	Scheme    *runtime.Scheme
+	Logger    *slog.Logger
+	Namespace string
+	AdaptorID pluginv1alpha1.HardwareManagerAdaptorID
 }
 
-func NewLoopbackAdaptor(client client.Client, logger *slog.Logger, namespace string) *LoopbackAdaptor {
+func NewLoopbackAdaptor(client client.Client, scheme *runtime.Scheme, logger *slog.Logger, namespace string) *LoopbackAdaptor {
 	return &LoopbackAdaptor{
 		Client:    client,
-		logger:    logger,
-		namespace: namespace,
+		Scheme:    scheme,
+		Logger:    logger.With("adaptor", "loopback"),
+		Namespace: namespace,
 	}
 }
 
-func (a *LoopbackAdaptor) SetupAdaptor() error {
-	a.logger.Info("SetupAdaptor called for Loopback")
+func (a *LoopbackAdaptor) SetupAdaptor(mgr ctrl.Manager) error {
+	a.Logger.Info("SetupAdaptor called for Loopback")
+
+	if err := (&controller.HardwareManagerReconciler{
+		Client:    a.Client,
+		Scheme:    a.Scheme,
+		Logger:    a.Logger,
+		Namespace: a.Namespace,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to setup loopback adaptor: %w", err)
+	}
+
 	return nil
 }
 
@@ -60,7 +76,7 @@ const (
 
 func (a *LoopbackAdaptor) determineAction(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) NodePoolFSMAction {
 	if len(nodepool.Status.Conditions) == 0 {
-		a.logger.InfoContext(ctx, "Handling Create NodePool request, name="+nodepool.Name)
+		a.Logger.InfoContext(ctx, "Handling Create NodePool request, name="+nodepool.Name)
 		return NodePoolFSMCreate
 	}
 
@@ -69,7 +85,7 @@ func (a *LoopbackAdaptor) determineAction(ctx context.Context, nodepool *hwmgmtv
 		string(hwmgmtv1alpha1.Provisioned))
 	if provisionedCondition != nil {
 		if provisionedCondition.Status == metav1.ConditionTrue {
-			a.logger.InfoContext(ctx, "NodePool request in Provisioned state, name="+nodepool.Name)
+			a.Logger.InfoContext(ctx, "NodePool request in Provisioned state, name="+nodepool.Name)
 			return NodePoolFSMNoop
 		}
 
@@ -79,14 +95,14 @@ func (a *LoopbackAdaptor) determineAction(ctx context.Context, nodepool *hwmgmtv
 	return NodePoolFSMNoop
 }
 
-func (a *LoopbackAdaptor) HandleNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
+func (a *LoopbackAdaptor) HandleNodePool(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
 	result := utils.DoNotRequeue()
 
 	switch a.determineAction(ctx, nodepool) {
 	case NodePoolFSMCreate:
-		return a.HandleNodePoolCreate(ctx, nodepool)
+		return a.HandleNodePoolCreate(ctx, hwmgr, nodepool)
 	case NodePoolFSMProcessing:
-		return a.HandleNodePoolProcessing(ctx, nodepool)
+		return a.HandleNodePoolProcessing(ctx, hwmgr, nodepool)
 	case NodePoolFSMNoop:
 		// Nothing to do
 		return result, nil
@@ -95,10 +111,10 @@ func (a *LoopbackAdaptor) HandleNodePool(ctx context.Context, nodepool *hwmgmtv1
 	return result, nil
 }
 
-func (a *LoopbackAdaptor) HandleNodePoolDeletion(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
-	a.logger.InfoContext(ctx, "Finalizing nodepool", "name", nodepool.Name)
+func (a *LoopbackAdaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) error {
+	a.Logger.InfoContext(ctx, "Finalizing nodepool", "name", nodepool.Name)
 
-	if err := a.ReleaseNodePool(ctx, nodepool); err != nil {
+	if err := a.ReleaseNodePool(ctx, hwmgr, nodepool); err != nil {
 		return fmt.Errorf("failed to release nodepool %s: %w", nodepool.Name, err)
 	}
 

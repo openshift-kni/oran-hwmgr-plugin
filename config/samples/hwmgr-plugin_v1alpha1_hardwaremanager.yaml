@@ -1,0 +1,16 @@
+apiVersion: hwmgr-plugin.oran.openshift.io/v1alpha1
+kind: HardwareManager
+metadata:
+  labels:
+    app.kubernetes.io/name: hardwaremanager
+    app.kubernetes.io/instance: hardwaremanager-sample
+    app.kubernetes.io/part-of: oran-hwmgr-plugin
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: oran-hwmgr-plugin
+  name: hardwaremanager-sample
+spec:
+  adaptor-id: dell-hwmgr
+  dell-data:
+    user: admin
+status:
+  observedGeneration: 1
