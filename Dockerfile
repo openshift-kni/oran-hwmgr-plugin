@@ -15,7 +15,7 @@ COPY go.sum go.sum
 
 # Copy the go source
 COPY cmd/main.go cmd/main.go
-#COPY api/ api/
+COPY api/ api/
 COPY adaptors/ adaptors/
 COPY internal/ internal/
 

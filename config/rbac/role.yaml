@@ -28,6 +28,32 @@ rules:
   - update
   - watch
 - apiGroups:
+  - hwmgr-plugin.oran.openshift.io
+  resources:
+  - hardwaremanagers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hwmgr-plugin.oran.openshift.io
+  resources:
+  - hardwaremanagers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hwmgr-plugin.oran.openshift.io
+  resources:
+  - hardwaremanagers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
   - nodepools

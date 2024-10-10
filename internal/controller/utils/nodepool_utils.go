@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-const NodepoolFinalizer = "oran-hwmgr-plugin.oran.openshift.io/nodepool-finalizer"
+const NodepoolFinalizer = "oran-hwmgr-plugin/nodepool-finalizer"
 
 func GetNodePoolProvisionedCondition(nodepool *hwmgmtv1alpha1.NodePool) *metav1.Condition {
 	return meta.FindStatusCondition(
@@ -64,8 +64,8 @@ func UpdateNodePoolStatusCondition(
 	message string) error {
 
 	SetStatusCondition(&nodepool.Status.Conditions,
-		conditionType,
-		conditionReason,
+		string(conditionType),
+		string(conditionReason),
 		conditionStatus,
 		message)
 
@@ -76,8 +76,8 @@ func UpdateNodePoolStatusCondition(
 			return err
 		}
 		SetStatusCondition(&newNodepool.Status.Conditions,
-			conditionType,
-			conditionReason,
+			string(conditionType),
+			string(conditionReason),
 			conditionStatus,
 			message)
 		if err := c.Status().Update(ctx, newNodepool); err != nil {

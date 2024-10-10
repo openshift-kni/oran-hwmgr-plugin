@@ -1,4 +1,4 @@
 ## Append samples you want in your CSV to this file as resources ##
-resources: []
-#- o2ims-hardwaremanagement_v1alpha1_nodepool.yaml
+resources:
+- hwmgr-plugin_v1alpha1_hardwaremanager.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples
