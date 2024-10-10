@@ -20,7 +20,7 @@ spec:
       name: Age
       type: date
     - description: The adaptor ID.
-      jsonPath: .status.adaptor-id
+      jsonPath: .status.adaptorId
       name: Adaptor ID
       priority: 1
       type: string
@@ -49,13 +49,13 @@ spec:
           spec:
             description: HardwareManagerSpec defines the desired state of HardwareManager
             properties:
-              adaptor-id:
+              adaptorId:
                 description: The adaptor ID
                 enum:
                 - loopback
                 - dell-hwmgr
                 type: string
-              dell-data:
+              dellData:
                 description: Config data for an instance of the dell-hwmgr adaptor
                 properties:
                   user:
@@ -65,7 +65,7 @@ spec:
                 required:
                 - user
                 type: object
-              loopback-data:
+              loopbackData:
                 description: Config data for an instance of the loopback adaptor
                 properties:
                   additional-info:
@@ -73,7 +73,7 @@ spec:
                     type: string
                 type: object
             required:
-            - adaptor-id
+            - adaptorId
             type: object
           status:
             description: HardwareManagerStatus defines the observed state of HardwareManager

@@ -88,7 +88,7 @@ func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, nodepool *hwmgmtv
 			return nil, fmt.Errorf("required config data missing from HardwareManager: name=%s", hwmgr.Name)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported adaptor-id (%s) HardwareManager: name=%s", hwmgr.Spec.AdaptorID, hwmgr.Name)
+		return nil, fmt.Errorf("unsupported adaptorId (%s) HardwareManager: name=%s", hwmgr.Spec.AdaptorID, hwmgr.Name)
 	}
 
 	return hwmgr, nil

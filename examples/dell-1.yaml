@@ -5,6 +5,6 @@ metadata:
   name: dell-1
   namespace: oran-hwmgr-plugin
 spec:
-  adaptor-id: dell-hwmgr
-  dell-data:
+  adaptorId: dell-hwmgr
+  dellData:
     user: admin

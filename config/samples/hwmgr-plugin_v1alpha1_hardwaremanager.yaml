@@ -9,8 +9,8 @@ metadata:
     app.kubernetes.io/created-by: oran-hwmgr-plugin
   name: hardwaremanager-sample
 spec:
-  adaptor-id: dell-hwmgr
-  dell-data:
+  adaptorId: dell-hwmgr
+  dellData:
     user: admin
 status:
   observedGeneration: 1

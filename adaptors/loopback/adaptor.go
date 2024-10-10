@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Setup the Loopback Adaptor
 type LoopbackAdaptor struct {
 	client.Client
 	Scheme    *runtime.Scheme
@@ -50,6 +49,7 @@ func NewLoopbackAdaptor(client client.Client, scheme *runtime.Scheme, logger *sl
 	}
 }
 
+// SetupAdaptor sets up the Loopback adaptor
 func (a *LoopbackAdaptor) SetupAdaptor(mgr ctrl.Manager) error {
 	a.Logger.Info("SetupAdaptor called for Loopback")
 

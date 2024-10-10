@@ -64,8 +64,8 @@ func UpdateNodePoolStatusCondition(
 	message string) error {
 
 	SetStatusCondition(&nodepool.Status.Conditions,
-		conditionType,
-		conditionReason,
+		string(conditionType),
+		string(conditionReason),
 		conditionStatus,
 		message)
 
@@ -76,8 +76,8 @@ func UpdateNodePoolStatusCondition(
 			return err
 		}
 		SetStatusCondition(&newNodepool.Status.Conditions,
-			conditionType,
-			conditionReason,
+			string(conditionType),
+			string(conditionReason),
 			conditionStatus,
 			message)
 		if err := c.Status().Update(ctx, newNodepool); err != nil {

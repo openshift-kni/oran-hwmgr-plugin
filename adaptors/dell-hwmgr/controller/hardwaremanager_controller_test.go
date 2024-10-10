@@ -53,6 +53,9 @@ var _ = Describe("HardwareManager Controller", func() {
 					},
 					Spec: hwmgrpluginoranopenshiftiov1alpha1.HardwareManagerSpec{
 						AdaptorID: "dell-hwmgr",
+						DellData: &hwmgrpluginoranopenshiftiov1alpha1.DellData{
+							User: "test",
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

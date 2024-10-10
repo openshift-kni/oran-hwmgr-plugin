@@ -18,8 +18,8 @@ metadata:
             "name": "hardwaremanager-sample"
           },
           "spec": {
-            "adaptor-id": "dell-hwmgr",
-            "dell-data": {
+            "adaptorId": "dell-hwmgr",
+            "dellData": {
               "user": "admin"
             }
           },
@@ -48,19 +48,19 @@ spec:
       specDescriptors:
       - description: The adaptor ID
         displayName: Adaptor ID
-        path: adaptor-id
+        path: adaptorId
       - description: Config data for an instance of the dell-hwmgr adaptor
         displayName: Dell Data
-        path: dell-data
+        path: dellData
       - description: The username for connection to the Dell Hardware Manager
         displayName: User
-        path: dell-data.user
+        path: dellData.user
       - description: Config data for an instance of the loopback adaptor
         displayName: Loopback Data
-        path: loopback-data
+        path: loopbackData
       - description: A test string
         displayName: Addtional Info
-        path: loopback-data.additional-info
+        path: loopbackData.additional-info
       statusDescriptors:
       - description: Conditions describe the state of the UpdateService resource.
         displayName: Conditions

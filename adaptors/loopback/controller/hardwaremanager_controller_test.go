@@ -53,6 +53,9 @@ var _ = Describe("HardwareManager Controller", func() {
 					},
 					Spec: hwmgrpluginoranopenshiftiov1alpha1.HardwareManagerSpec{
 						AdaptorID: "loopback",
+						LoopbackData: &hwmgrpluginoranopenshiftiov1alpha1.LoopbackData{
+							AddtionalInfo: "test string",
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

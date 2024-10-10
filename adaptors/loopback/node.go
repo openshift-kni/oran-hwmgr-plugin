@@ -215,8 +215,8 @@ func (a *LoopbackAdaptor) UpdateNodeStatus(ctx context.Context, nodename string,
 	node.Status.Interfaces = info.Interfaces
 
 	utils.SetStatusCondition(&node.Status.Conditions,
-		hwmgmtv1alpha1.Provisioned,
-		hwmgmtv1alpha1.Completed,
+		string(hwmgmtv1alpha1.Provisioned),
+		string(hwmgmtv1alpha1.Completed),
 		metav1.ConditionTrue,
 		"Provisioned")
 

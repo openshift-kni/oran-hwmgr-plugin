@@ -32,7 +32,6 @@ import (
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 )
 
-// Setup the Loopback Adaptor
 type DellHwMgrAdaptor struct {
 	client.Client
 	Scheme    *runtime.Scheme
@@ -50,6 +49,7 @@ func NewDellHwMgrAdaptor(client client.Client, scheme *runtime.Scheme, logger *s
 	}
 }
 
+// SetupAdaptor sets up the Dell Hardware Manager Adaptor
 func (a *DellHwMgrAdaptor) SetupAdaptor(mgr ctrl.Manager) error {
 	a.Logger.Info("SetupAdaptor called for DellHwMgr")
 

@@ -23,6 +23,30 @@ import (
 // HardwareManagerAdaptorID defines the type for the Hardware Manager Adaptor
 type HardwareManagerAdaptorID string
 
+// ConditionType is a string representing the condition's type
+type ConditionType string
+
+// ConditionTypes define the different types of conditions that will be set
+var ConditionTypes = struct {
+	Validation ConditionType
+}{
+	Validation: "Validation",
+}
+
+// ConditionReason is a string representing the condition's reason
+type ConditionReason string
+
+// ConditionReasons define the different reasons that conditions will be set for
+var ConditionReasons = struct {
+	Completed  ConditionReason
+	Failed     ConditionReason
+	InProgress ConditionReason
+}{
+	Completed:  "Completed",
+	Failed:     "Failed",
+	InProgress: "InProgress",
+}
+
 // SupportedAdaptors defines the string values for valid stages
 var SupportedAdaptors = struct {
 	Loopback HardwareManagerAdaptorID
@@ -56,15 +80,15 @@ type HardwareManagerSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=loopback;dell-hwmgr
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	AdaptorID HardwareManagerAdaptorID `json:"adaptor-id"`
+	AdaptorID HardwareManagerAdaptorID `json:"adaptorId"`
 
 	// Config data for an instance of the loopback adaptor
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	LoopbackData *LoopbackData `json:"loopback-data,omitempty"`
+	LoopbackData *LoopbackData `json:"loopbackData,omitempty"`
 
 	// Config data for an instance of the dell-hwmgr adaptor
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	DellData *DellData `json:"dell-data,omitempty"`
+	DellData *DellData `json:"dellData,omitempty"`
 }
 
 // HardwareManagerStatus defines the observed state of HardwareManager
@@ -83,7 +107,7 @@ type HardwareManagerStatus struct {
 // +operator-sdk:csv:customresourcedefinitions:resources={{Service,v1,policy-engine-service}}
 // +kubebuilder:object:root=true
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the HardwareManager resource."
-// +kubebuilder:printcolumn:name="Adaptor ID",type="string",JSONPath=".status.adaptor-id",description="The adaptor ID.",priority=1
+// +kubebuilder:printcolumn:name="Adaptor ID",type="string",JSONPath=".status.adaptorId",description="The adaptor ID.",priority=1
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=hardwaremanagers,scope=Namespaced
 
