@@ -227,7 +227,16 @@ func isConflictOrRetriable(err error) bool {
 	return errors.IsConflict(err) || errors.IsInternalError(err) || errors.IsServiceUnavailable(err) || net.IsConnectionRefused(err)
 }
 
+func isConflictOrRetriableOrNotFound(err error) bool {
+	return isConflictOrRetriable(err) || errors.IsNotFound(err)
+}
+
 func RetryOnConflictOrRetriable(backoff wait.Backoff, fn func() error) error {
 	// nolint: wrapcheck
 	return retry.OnError(backoff, isConflictOrRetriable, fn)
+}
+
+func RetryOnConflictOrRetriableOrNotFound(backoff wait.Backoff, fn func() error) error {
+	// nolint: wrapcheck
+	return retry.OnError(backoff, isConflictOrRetriableOrNotFound, fn)
 }

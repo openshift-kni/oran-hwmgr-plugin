@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -202,8 +203,10 @@ func (a *Adaptor) UpdateNodeStatus(ctx context.Context, nodename string, info cm
 
 	node := &hwmgmtv1alpha1.Node{}
 
-	if err := a.Client.Get(ctx, types.NamespacedName{Name: nodename, Namespace: a.Namespace}, node); err != nil {
-		return fmt.Errorf("failed to create Node: %w", err)
+	if err := utils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		return a.Get(ctx, types.NamespacedName{Name: nodename, Namespace: a.Namespace}, node)
+	}); err != nil {
+		return fmt.Errorf("failed to get Node for update: %w", err)
 	}
 
 	a.Logger.InfoContext(ctx, "Adding info to node", "nodename", nodename, "info", info)
