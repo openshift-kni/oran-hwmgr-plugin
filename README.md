@@ -6,9 +6,20 @@ O-Cloud Hardware Manager Plugin
 
 The `HardwareManager` CRD provides configuration information for an instance of a hardware manager. For a given hardware manager, create a `HardwareManager` CR that selects the appropriate adaptorId, as well as providing the configuration data for that adaptor. The name of this CR would then be used as the `hwMgrId` in the `NodePool` CR, in order to specify which hardware manager instance should be used to handle the request.
 
-For example, if using the Dell hardware manager, create a CR that specifies the `dell-hwmgr` adaptor with configuration data to allow communication to the hardware manager.
+For example, if using the Dell hardware manager, create a CR and corresponding secret that specifies the `dell-hwmgr` adaptor with configuration data to allow communication to the hardware manager.
 
 ```yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dell-1
+  namespace: oran-hwmgr-plugin
+type: kubernetes.io/basic-auth
+data:
+  client-id: bXljbGllbnQ=
+  username: YWRtaW4=
+  password: bm90cmVhbA==
 ---
 apiVersion: hwmgr-plugin.oran.openshift.io/v1alpha1
 kind: HardwareManager
@@ -18,7 +29,6 @@ metadata:
 spec:
   adaptorId: dell-hwmgr
   dellData:
-    clientId: myclient
     authSecret: dell-1
     apiUrl: https://myserver.example.com:443/
 ```
