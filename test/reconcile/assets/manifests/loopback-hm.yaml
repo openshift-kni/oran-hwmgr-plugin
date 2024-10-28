@@ -1,0 +1,10 @@
+---
+apiVersion: hwmgr-plugin.oran.openshift.io/v1alpha1
+kind: HardwareManager
+metadata:
+  name: loopback-1
+  namespace: default
+spec:
+  adaptorId: loopback
+  loopbackData:
+    additionalInfo: "This is a test string"

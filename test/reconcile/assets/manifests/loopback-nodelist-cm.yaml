@@ -1,0 +1,33 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: loopback-adaptor-nodelist
+  namespace: default
+data:
+  resources: |
+    hwprofiles:
+      - profile-spr-dual-processor-128G
+      - profile-spr-single-processor-64G
+    nodes:
+      dummy-sp-64g-0:
+        hwprofile: profile-spr-single-processor-64G
+        bmc:
+          address: "idrac-virtualmedia+https://192.168.2.0/redfish/v1/Systems/System.Embedded.1"
+          username-base64: YWRtaW4=
+          password-base64: bXlwYXNz
+        interfaces:
+          - name: eth0
+            label: bootable-interface
+            macAddress: "c6:b6:13:a0:02:00"
+        hostname: "dummy-sp-64g-0.localhost"
+      dummy-sp-128g-0:
+        hwprofile: profile-spr-dual-processor-128G
+        bmc:
+          address: "idrac-virtualmedia+https://192.168.2.1/redfish/v1/Systems/System.Embedded.1"
+          username-base64: YWRtaW4=
+          password-base64: bXlwYXNz
+        interfaces:
+          - name: eth0
+            label: bootable-interface
+            macAddress: "c6:b6:13:a0:02:01"
+        hostname: "dummy-sp-128g-0.localhost"

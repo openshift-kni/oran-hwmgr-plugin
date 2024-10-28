@@ -1,0 +1,27 @@
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: NodePool
+metadata:
+  name: np1
+  namespace: default
+spec:
+  cloudID: testcloud-1
+  hwMgrId: loopback-1
+  location: ottawa
+  nodeGroup:
+  - hwProfile: profile-spr-single-processor-64G
+    name: master
+    size: 1
+  site: building-1
+
+
+
+
+
+
+
+
+
+
+
+
+
