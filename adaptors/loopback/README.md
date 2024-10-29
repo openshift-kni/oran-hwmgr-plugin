@@ -99,34 +99,59 @@ status:
     nodeNames:
     - dummy-sp-64g-1
 
-$ oc get nodes.o2ims-hardwaremanagement.oran.openshift.io -n oran-hwmgr-plugin dummy-sp-64g-1 -o yaml
+```
+
+The HardwareManager CR for the loopback adaptor can be installed via [../../examples/loopback-1.yaml](../../examples/loopback-1.yaml)
+
+```
+$ oc create -f ../../examples/loopback-1.yaml
+hardwaremanager.hwmgr-plugin.oran.openshift.io/loopback-1 created
+```
+At this moment, the loopback adaptor will reconcile this CR, creating nodes with the info provided by loopback-adaptor-nodelist CM with the hardware profile specified by the NodePool CR.
+
+We can examine logs and Node objects to confirm this:
+
+```
+oc logs -n oran-hwmgr-plugin -l control-plane=controller-manager -f
+...
+2024/10/24 11:04:38 INFO Creating node: controller=adaptors adaptor=loopback cloudID=testcloud-1 "nodegroup name"=master nodename=dummy-sp-64g-0
+2024/10/24 11:04:38 INFO Updating node: controller=adaptors adaptor=loopback nodename=dummy-sp-64g-0
+2024/10/24 11:04:38 INFO Adding info to node controller=adaptors adaptor=loopback nodename=dummy-sp-64g-0 info="{HwProfile:profile-spr-single-processor-64G BMC:0xc00052c570 Interfaces:[0xc00052c5d0] Hostname:dummy-sp-64g-0.localhost}"
+2024/10/24 11:04:38 INFO nodegroup is fully allocated controller=adaptors adaptor=loopback nodegroup=worker
+2024/10/24 11:04:38 INFO Allocating node for CheckNodePoolProgress request: controller=adaptors adaptor=loopback cloudID=testcloud-1 "nodegroup name"=worker
+
+$ oc get nodes.o2ims-hardwaremanagement.oran.openshift.io -n oran-hwmgr-plugin
+NAME             AGE     STATE
+dummy-sp-64g-0   3m26s   Completed
+
+$ oc get nodes.o2ims-hardwaremanagement.oran.openshift.io -n oran-hwmgr-plugin dummy-sp-64g-0 -o yaml
 apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
 kind: Node
 metadata:
-  creationTimestamp: "2024-09-18T17:29:11Z"
+  creationTimestamp: "2024-10-24T11:04:38Z"
   generation: 1
-  name: dummy-sp-64g-1
+  name: dummy-sp-64g-0
   namespace: oran-hwmgr-plugin
-  resourceVersion: "15831"
-  uid: a0021f5a-34bc-4e5f-95c4-8372f4ce3fa3
+  resourceVersion: "125600522"
+  uid: 32250756-d8e4-462e-b955-1c3b89335d31
 spec:
   groupName: master
   hwProfile: profile-spr-single-processor-64G
   nodePool: testcloud-1
 status:
   bmc:
-    address: idrac-virtualmedia+https://192.168.2.1/redfish/v1/Systems/System.Embedded.1
-    credentialsName: dummy-sp-64g-1-bmc-secret
+    address: idrac-virtualmedia+https://192.168.2.0/redfish/v1/Systems/System.Embedded.1
+    credentialsName: dummy-sp-64g-0-bmc-secret
   conditions:
-  - lastTransitionTime: "2024-09-18T17:29:11Z"
+  - lastTransitionTime: "2024-10-24T11:04:38Z"
     message: Provisioned
     reason: Completed
     status: "True"
     type: Provisioned
-  hostname: dummy-sp-64g-1.localhost
+  hostname: dummy-sp-64g-0.localhost
   interfaces:
   - label: bootable-interface
-    macAddress: c6:b6:13:a0:02:01
+    macAddress: c6:b6:13:a0:02:00
     name: eth0
 
 $ oc get configmap -n oran-hwmgr-plugin loopback-adaptor-nodelist -o yaml
@@ -236,9 +261,38 @@ metadata:
   creationTimestamp: "2024-09-18T17:28:38Z"
   name: loopback-adaptor-nodelist
   namespace: oran-hwmgr-plugin
+
   resourceVersion: "15829"
   uid: e6dfe91c-0713-46d2-b3e5-b883c3d8b8c5
 
 ```
+### Clean up O-Cloud Hardware Manager Plugin
 
+We cannot call `make undeploy` directly to clean up all the resources created in `oran-hwmgr-plugin` namespace as there is a finalizer configured as part of the NodePool, and the undeployment must be performed orderly according to this deletion policy.
 
+```
+$ oc get nodepools.o2ims-hardwaremanagement.oran.openshift.io -n oran-hwmgr-plugin np1 -o yaml
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: NodePool
+metadata:
+  ...
+  finalizers:
+  - oran-hwmgr-plugin/nodepool-finalizer
+```
+
+We will follow this undeployment sequence therefore (execute the make command from the project root):
+
+```
+$ oc delete -f examples/np1.yaml
+$ make undeploy
+```
+
+Additionally, we might remove the CRDs installed from the O-Cloud Manager,uninstalling them executing this from the corresponding project root:
+
+```
+$ make uninstall
+...
+customresourcedefinition.apiextensions.k8s.io "nodepools.o2ims-hardwaremanagement.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "nodes.o2ims-hardwaremanagement.oran.openshift.io" deleted
+...
+```
