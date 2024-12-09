@@ -13,7 +13,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
-	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241209130036-e9695ba7a364
+	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241209142323-d4afb172a747
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
 	github.com/sethvargo/go-retry v0.3.0
 	golang.org/x/mod v0.22.0
