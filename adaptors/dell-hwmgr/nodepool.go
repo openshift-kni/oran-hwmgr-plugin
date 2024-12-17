@@ -193,6 +193,16 @@ func (a *Adaptor) HandleNodePoolProcessing(
 
 	// TODO: Need to add validation to ensure the rg satisfies the nodepool
 
+	// WIP: Perform Validation
+	a.Logger.InfoContext(ctx, "Validating created resource group with nodepool")
+
+	if err := utils.ValidateNodepoolWithResourceSelector(ctx, nodepool, *rg.ResourceSelectors); err != nil {
+		a.Logger.InfoContext(ctx, "Validation failed for resource group", slog.String("error", err.Error()))
+		return utils.RequeueWithMediumInterval(), fmt.Errorf("validation failed for resource group: %w", err)
+	}
+
+	a.Logger.InfoContext(ctx, "Validation complete for resource group with nodepool")
+
 	var nodelist = hwmgmtv1alpha1.NodeList{}
 	if err := a.Client.List(ctx, &nodelist); err != nil {
 		a.Logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))

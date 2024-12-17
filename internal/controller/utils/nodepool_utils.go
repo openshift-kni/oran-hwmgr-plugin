@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	// is this import allowed here?
+	api "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/generated"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -192,6 +194,52 @@ func NodepoolRemoveFinalizer(
 	})
 	if err != nil {
 		return fmt.Errorf("failed to remove finalizer from nodepool: %w", err)
+	}
+	return nil
+}
+
+func ValidateNodepoolWithResourceSelector(
+	ctx context.Context,
+	nodepool *hwmgmtv1alpha1.NodePool,
+	resourceSelector map[string]api.RhprotoResourceSelectorGetResponse,
+) error {
+
+	for _, node := range nodepool.Spec.NodeGroup {
+		nodeName := node.NodePoolData.Name
+
+		if resource, exists := resourceSelector[nodeName]; exists {
+			if node.NodePoolData.HwProfile != *resource.ResourceProfileId {
+				return fmt.Errorf("invalid resource profile for node %s\n expected: %s found: %s",
+					nodeName, node.NodePoolData.HwProfile, *resource.ResourceProfileId)
+			}
+			if float32(node.Size) != *resource.NumResources {
+				return fmt.Errorf("invalid num of resources for node %s\n expected: %f found: %f",
+					nodeName, float32(node.Size), *resource.NumResources)
+			}
+			if node.NodePoolData.ResourcePoolId != *resource.RpId {
+				return fmt.Errorf("invalid resource pool id for node %s\n expected: %s found: %s",
+					nodeName, node.NodePoolData.ResourcePoolId, *resource.RpId)
+			}
+			// Find value for key role in included labels
+			role := ""
+			if resource.Filters != nil && resource.Filters.Include != nil {
+				for _, label := range *resource.Filters.Include.Labels {
+					if label.Key != nil && *label.Key == "role" {
+						role = *label.Value
+						break
+					}
+				}
+			}
+			// Comparing role to node name
+			if node.NodePoolData.Name != role {
+				return fmt.Errorf("invalid role for node %s\n expected: %s found %s",
+					nodeName, node.NodePoolData.Name, role)
+			}
+
+		} else {
+			return fmt.Errorf("validation failed, %s node does not exist in resource group", nodeName)
+		}
+
 	}
 	return nil
 }
