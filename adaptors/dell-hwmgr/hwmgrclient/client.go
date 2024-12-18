@@ -343,10 +343,8 @@ func (c *HardwareManagerClient) ValidateNodepoolWithResourceSelector(
 	nodepool *hwmgmtv1alpha1.NodePool,
 	resourceSelector map[string]hwmgrapi.RhprotoResourceSelectorGetResponse,
 ) error {
-
 	for _, node := range nodepool.Spec.NodeGroup {
 		nodeName := node.NodePoolData.Name
-
 		if resource, exists := resourceSelector[nodeName]; exists {
 			if float32(node.Size) != *resource.NumResources {
 				return fmt.Errorf("invalid num of resources for node %s\n expected: %f found: %f",
@@ -356,11 +354,9 @@ func (c *HardwareManagerClient) ValidateNodepoolWithResourceSelector(
 				return fmt.Errorf("invalid resource pool id for node %s\n expected: %s found: %s",
 					nodeName, node.NodePoolData.ResourcePoolId, *resource.RpId)
 			}
-
 		} else {
 			return fmt.Errorf("validation failed, %s node does not exist in resource group", nodeName)
 		}
-
 	}
 	return nil
 }
