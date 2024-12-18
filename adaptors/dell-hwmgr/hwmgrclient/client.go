@@ -346,14 +346,25 @@ func (c *HardwareManagerClient) ValidateNodepoolWithResourceSelector(
 	for _, node := range nodepool.Spec.NodeGroup {
 		nodeName := node.NodePoolData.Name
 		if resource, exists := resourceSelector[nodeName]; exists {
-			// Ensure expected number of nodes are present
-			if float32(node.Size) != *resource.NumResources {
-				return fmt.Errorf("invalid num of resources for node %s\n expected: %f found: %f",
-					nodeName, float32(node.Size), *resource.NumResources)
+			if resource.NumResources != nil {
+				// Ensure expected number of nodes are present
+				if float32(node.Size) != *resource.NumResources {
+					return fmt.Errorf("invalid num of resources for node %s\n expected: %f found: %f",
+						nodeName, float32(node.Size), *resource.NumResources)
+				}
+			} else {
+				return fmt.Errorf("missing num of resources for node %s\n expected: %f",
+					nodeName, float32(node.Size))
 			}
-			if node.NodePoolData.ResourcePoolId != *resource.RpId {
-				return fmt.Errorf("invalid resource pool id for node %s\n expected: %s found: %s",
-					nodeName, node.NodePoolData.ResourcePoolId, *resource.RpId)
+			if resource.RpId != nil {
+				// Ensure resource pool id match
+				if node.NodePoolData.ResourcePoolId != *resource.RpId {
+					return fmt.Errorf("invalid resource pool id for node %s\n expected: %s found: %s",
+						nodeName, node.NodePoolData.ResourcePoolId, *resource.RpId)
+				}
+			} else {
+				return fmt.Errorf("missing resource pool id for node %s\n expected: %s",
+					nodeName, node.NodePoolData.ResourcePoolId)
 			}
 		} else {
 			return fmt.Errorf("validation failed, %s node does not exist in resource group", nodeName)
