@@ -195,8 +195,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 
 	// WIP: Perform Validation
 	a.Logger.InfoContext(ctx, "Validating created resource group with nodepool")
-
-	if err := utils.ValidateNodepoolWithResourceSelector(ctx, nodepool, *rg.ResourceSelectors); err != nil {
+	if err := hwmgrClient.ValidateNodepoolWithResourceSelector(ctx, nodepool, *rg.ResourceSelectors); err != nil {
 		a.Logger.InfoContext(ctx, "Validation failed for resource group", slog.String("error", err.Error()))
 		return utils.RequeueWithMediumInterval(), fmt.Errorf("validation failed for resource group: %w", err)
 	}
