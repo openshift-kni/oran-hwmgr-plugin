@@ -192,7 +192,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	}
 
 	a.Logger.InfoContext(ctx, fmt.Sprintf("Validating ResourceGroup %s with nodepool %s", *rg.Id, nodepool.Name))
-	if err := hwmgrClient.ValidateNodepoolWithResourceSelector(ctx, nodepool, *rg.ResourceSelectors); err != nil {
+	if err := hwmgrClient.ValidateResourceGroup(ctx, nodepool, *rg); err != nil {
 		a.Logger.InfoContext(ctx, fmt.Sprintf("Validation failed for ResourceGroup %s with nodepool %s", *rg.Id, nodepool.Name), slog.String("error", err.Error()))
 		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
