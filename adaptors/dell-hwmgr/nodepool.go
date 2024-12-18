@@ -191,10 +191,9 @@ func (a *Adaptor) HandleNodePoolProcessing(
 		return utils.DoNotRequeue(), nil
 	}
 
-	// WIP: Perform Validation
-	a.Logger.InfoContext(ctx, "Validating ResourceGroup with nodepool")
+	a.Logger.InfoContext(ctx, fmt.Sprintf("Validating ResourceGroup %s with nodepool %s", *rg.Id, nodepool.Name))
 	if err := hwmgrClient.ValidateNodepoolWithResourceSelector(ctx, nodepool, *rg.ResourceSelectors); err != nil {
-		a.Logger.InfoContext(ctx, fmt.Sprintf("Validation failed for ResourceGroup: %s", *rg.Id), slog.String("error", err.Error()))
+		a.Logger.InfoContext(ctx, fmt.Sprintf("Validation failed for ResourceGroup %s with nodepool %s", *rg.Id, nodepool.Name), slog.String("error", err.Error()))
 		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
 			"Failed to validate resource group: "+err.Error()); err != nil {
@@ -203,7 +202,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 		}
 	}
 
-	a.Logger.InfoContext(ctx, "Validation complete for resource group with nodepool")
+	a.Logger.InfoContext(ctx, fmt.Sprintf("Validation complete for ResourceGroup %s with nodepool %s", *rg.Id, nodepool.Name))
 
 	var nodelist = hwmgmtv1alpha1.NodeList{}
 	if err := a.Client.List(ctx, &nodelist); err != nil {
