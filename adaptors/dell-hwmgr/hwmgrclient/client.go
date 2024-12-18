@@ -346,6 +346,7 @@ func (c *HardwareManagerClient) ValidateNodepoolWithResourceSelector(
 	for _, node := range nodepool.Spec.NodeGroup {
 		nodeName := node.NodePoolData.Name
 		if resource, exists := resourceSelector[nodeName]; exists {
+			// Ensure expected number of nodes are present
 			if float32(node.Size) != *resource.NumResources {
 				return fmt.Errorf("invalid num of resources for node %s\n expected: %f found: %f",
 					nodeName, float32(node.Size), *resource.NumResources)
