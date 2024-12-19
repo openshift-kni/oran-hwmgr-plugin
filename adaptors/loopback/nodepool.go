@@ -50,8 +50,8 @@ func (a *Adaptor) CheckNodePoolProgress(
 
 	for _, nodegroup := range nodepool.Spec.NodeGroup {
 		a.Logger.InfoContext(ctx, "Allocating node for CheckNodePoolProgress request:",
-			"cloudID", cloudID,
-			"nodegroup name", nodegroup.NodePoolData.Name,
+			slog.String("cloudID", cloudID),
+			slog.String("nodegroup name", nodegroup.NodePoolData.Name),
 		)
 
 		if err = a.AllocateNode(ctx, nodepool); err != nil {
@@ -121,7 +121,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	var result ctrl.Result
 
 	if full {
-		a.Logger.InfoContext(ctx, "NodePool request is fully allocated, name="+nodepool.Name)
+		a.Logger.InfoContext(ctx, "NodePool request is fully allocated")
 
 		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
@@ -131,7 +131,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 
 		result = utils.DoNotRequeue()
 	} else {
-		a.Logger.InfoContext(ctx, "NodePool request in progress, name="+nodepool.Name)
+		a.Logger.InfoContext(ctx, "NodePool request in progress")
 		result = utils.RequeueWithShortInterval()
 	}
 
@@ -147,7 +147,7 @@ func (a *Adaptor) checkNodeUpgradeProcess(
 
 	for _, name := range allocatedNodes {
 		// Fetch the latest version of each node to ensure up-to-date status
-		updatedNode, err := utils.GetNode(ctx, a.Client, a.Namespace, name)
+		updatedNode, err := utils.GetNode(ctx, a.Logger, a.Client, a.Namespace, name)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get node %s: %w", name, err)
 		}
@@ -174,7 +174,7 @@ func (a *Adaptor) handleNodePoolConfiguring(
 	var nodesToCheck []*hwmgmtv1alpha1.Node // To track nodes that we actually attempted to upgrade
 	var result ctrl.Result
 
-	a.Logger.InfoContext(ctx, "Handling Node Pool Configuring, name="+nodepool.Name)
+	a.Logger.InfoContext(ctx, "Handling Node Pool Configuring")
 
 	allocatedNodes, err := a.GetAllocatedNodes(ctx, nodepool)
 	if err != nil {
@@ -183,7 +183,7 @@ func (a *Adaptor) handleNodePoolConfiguring(
 
 	// Stage 1: Initiate upgrades by updating node.Spec.HwProfile as necessary
 	for _, name := range allocatedNodes {
-		node, err := utils.GetNode(ctx, a.Client, a.Namespace, name)
+		node, err := utils.GetNode(ctx, a.Logger, a.Client, a.Namespace, name)
 		if err != nil {
 			return utils.RequeueWithShortInterval(), err
 		}
@@ -308,7 +308,7 @@ func (a *Adaptor) IsNodePoolFullyAllocated(ctx context.Context,
 		remaining := nodegroup.Size - len(used)
 		if remaining <= 0 {
 			// This group is allocated
-			a.Logger.InfoContext(ctx, "nodegroup is fully allocated", "nodegroup", nodegroup.NodePoolData.Name)
+			a.Logger.InfoContext(ctx, "nodegroup is fully allocated", slog.String("nodegroup", nodegroup.NodePoolData.Name))
 			continue
 		}
 
@@ -332,7 +332,7 @@ func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 	cloudID := nodepool.Spec.CloudID
 
 	a.Logger.InfoContext(ctx, "Processing ReleaseNodePool request:",
-		"cloudID", cloudID,
+		slog.String("cloudID", cloudID),
 	)
 
 	cm, _, allocations, err := a.GetCurrentResources(ctx)
@@ -349,7 +349,7 @@ func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 	}
 
 	if index == -1 {
-		a.Logger.InfoContext(ctx, "no allocated nodes found", "cloudID", cloudID)
+		a.Logger.InfoContext(ctx, "no allocated nodes found", slog.String("cloudID", cloudID))
 		return nil
 	}
 
