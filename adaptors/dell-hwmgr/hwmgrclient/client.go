@@ -343,7 +343,7 @@ func (c *HardwareManagerClient) ValidateResourceGroup(
 	nodepool *hwmgmtv1alpha1.NodePool,
 	resourceGroup hwmgrapi.RhprotoResourceGroupObjectGetResponseBody,
 ) error {
-	if *resourceGroup.ResourceSelectors != nil {
+	if resourceGroup.ResourceSelectors != nil && *resourceGroup.ResourceSelectors != nil {
 		resourceSelector := *resourceGroup.ResourceSelectors
 		for _, nodegroup := range nodepool.Spec.NodeGroup {
 			nodegroupName := node.NodePoolData.Name
