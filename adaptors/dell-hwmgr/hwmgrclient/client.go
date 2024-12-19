@@ -37,6 +37,15 @@ const (
 	DefaultTenant = "default_tenant"
 )
 
+type JobStatus int
+
+const (
+	JobStatusInProgress = iota
+	JobStatusCompleted
+	JobStatusFailed
+	JobStatusUnknown
+)
+
 // HardwareManagerClient provides functions for calling the hardware manager APIs
 type HardwareManagerClient struct {
 	rtclient    client.Client
@@ -276,19 +285,54 @@ func (c *HardwareManagerClient) CreateResourceGroup(ctx context.Context, nodepoo
 	return *rgResponse.JSON200.Jobid, nil
 }
 
-// CheckResourceGroupRequest queries the hardware manager for the status of a job
-func (c *HardwareManagerClient) CheckResourceGroupRequest(ctx context.Context, jobId string) (*hwmgrapi.RhprotoJobStatus, error) {
+// CheckJobStatus queries the hardware manager for the status of a job
+func (c *HardwareManagerClient) CheckJobStatus(ctx context.Context, jobId string) (JobStatus, string, error) {
+	failReason := ""
 	tenant := c.GetTenant()
 	response, err := c.HwmgrClient.VerifyRequestStatusWithResponse(ctx, tenant, jobId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query for resource group job status: id: %s, response: %v, err: %w", jobId, response, err)
+		return JobStatusUnknown, failReason, fmt.Errorf("failed to query for job status: id: %s, response: %v, err: %w", jobId, response, err)
 	}
 
 	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("job query failed for %s: %s", jobId, *response.JSONDefault.Message)
+		return JobStatusUnknown, failReason, fmt.Errorf("job query failed for %s: %s", jobId, *response.JSONDefault.Message)
 	}
 
-	return response.JSON200, nil
+	status := response.JSON200
+	if status == nil || status.Brief == nil || status.Brief.Status == nil {
+		c.Logger.InfoContext(ctx, "Job progress check missing data", slog.Any("status", status))
+		return JobStatusUnknown, failReason, fmt.Errorf("job progress check missing data, jobId=%s: %w", jobId, err)
+	}
+
+	// Process the status response
+	switch *status.Brief.Status {
+	case "started":
+		c.Logger.InfoContext(ctx, "Job has started")
+		return JobStatusInProgress, failReason, nil
+	case "pending":
+		c.Logger.InfoContext(ctx, "Job is pending")
+		return JobStatusInProgress, failReason, nil
+	case "completed":
+		c.Logger.InfoContext(ctx, "Job has completed")
+	case "failed":
+		if status.Brief.FailReason != nil {
+			failReason = *status.Brief.FailReason
+		} else {
+			failReason = "unknown"
+		}
+		c.Logger.InfoContext(ctx, "Job has failed", slog.Any("status", status), slog.String("failReason", failReason))
+		return JobStatusFailed, failReason, fmt.Errorf("job has failed: %s", failReason)
+	default:
+		if status.Brief.FailReason != nil {
+			failReason = *status.Brief.FailReason
+		} else {
+			failReason = "unknown"
+		}
+		c.Logger.InfoContext(ctx, "Job status is unknown", slog.Any("status", status), slog.String("failReason", failReason))
+		return JobStatusUnknown, failReason, fmt.Errorf("job status is unknown: %s", failReason)
+	}
+
+	return JobStatusCompleted, failReason, nil
 }
 
 // DeleteResourceGroup asks the hardware manager to delete the resource group associated with the specified nodepool
@@ -304,7 +348,7 @@ func (c *HardwareManagerClient) DeleteResourceGroup(ctx context.Context, nodepoo
 	return *response.JSON200.Jobid, nil
 }
 
-// GetResourceGroup queries the hardware manager to get the resource group data
+// GetResourcePools queries the hardware manager to get the resource pool list
 func (c *HardwareManagerClient) GetResourcePools(ctx context.Context) (*hwmgrapi.ApiprotoResourcePoolsResp, error) {
 	tenant := c.GetTenant()
 	body := hwmgrapi.GetResourcePoolsJSONRequestBody{}
@@ -314,14 +358,14 @@ func (c *HardwareManagerClient) GetResourcePools(ctx context.Context) (*hwmgrapi
 	}
 
 	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("resource group get failed with status %s (%d), message=%s",
+		return nil, fmt.Errorf("resource pool get failed with status %s (%d), message=%s",
 			response.Status(), response.StatusCode(), string(response.Body))
 	}
 
 	return response.JSON200, nil
 }
 
-// GetResourceGroup queries the hardware manager to get the resource group data
+// GetSecret queries the hardware manager to get the Secret data
 func (c *HardwareManagerClient) GetSecret(ctx context.Context, secretKey string) (*hwmgrapi.RhprotoGetSecretsResponseBody, error) {
 	tenant := c.GetTenant()
 	response, err := c.HwmgrClient.GetSecretsWithResponse(ctx, tenant, secretKey)
@@ -330,9 +374,55 @@ func (c *HardwareManagerClient) GetSecret(ctx context.Context, secretKey string)
 	}
 
 	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("resource group get failed with status %s (%d), message=%s",
+		return nil, fmt.Errorf("get secret failed with status %s (%d), message=%s",
 			response.Status(), response.StatusCode(), string(response.Body))
 	}
 
 	return response.JSON200, nil
+}
+
+// GetResource queries the hardware manager to get the resource data
+func (c *HardwareManagerClient) GetResource(ctx context.Context, node *hwmgmtv1alpha1.Node) (*hwmgrapi.ApiprotoGetResourceResp, error) {
+	tenant := c.GetTenant()
+	response, err := c.HwmgrClient.GetResourceWithResponse(ctx, tenant, node.Spec.HwMgrNodeId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource: response: %v, err: %w", response, err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("resource get failed with status %s (%d), message=%s",
+			response.Status(), response.StatusCode(), string(response.Body))
+	}
+
+	return response.JSON200, nil
+}
+
+// UpdateResourceProfile sends a request to update the resource profile for a node
+func (c *HardwareManagerClient) UpdateResourceProfile(ctx context.Context, node *hwmgmtv1alpha1.Node, newHwProfile string) (string, error) {
+	tenant := c.GetTenant()
+
+	op := "replace"
+	path := "/Resource/ResourceProfileID"
+	value := []map[string]interface{}{{"resourceProfileID": newHwProfile}}
+	body := hwmgrapi.UpdateResourceJSONRequestBody{
+		ResourceName: &node.Spec.HwMgrNodeId,
+		Resource: &[]hwmgrapi.ApiprotoUpdateResource{
+			{
+				Op:    &op,
+				Path:  &path,
+				Value: &value,
+			},
+		},
+	}
+	response, err := c.HwmgrClient.UpdateResourceWithResponse(ctx, tenant, body)
+	if err != nil {
+		return "", fmt.Errorf("failed to get resource: response: %v, err: %w", response, err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		return "", fmt.Errorf("resource get failed with status %s (%d), message=%s",
+			response.Status(), response.StatusCode(), string(response.Body))
+	}
+
+	return *response.JSON200.Response.Jobid, nil
 }

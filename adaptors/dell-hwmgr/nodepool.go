@@ -40,11 +40,6 @@ const (
 
 // ValidateNodePool performs basic validation of the nodepool data
 func (a *Adaptor) ValidateNodePool(nodepool *hwmgmtv1alpha1.NodePool) error {
-	resourceTypeId := utils.GetResourceTypeId(nodepool)
-	if resourceTypeId == "" {
-		return fmt.Errorf("nodepool %s is missing resourceTypeId in spec", nodepool.Name)
-	}
-
 	return nil
 }
 
@@ -146,34 +141,30 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	ctx = logging.AppendCtx(ctx, slog.String("jobId", jobId))
 
 	// Query the hardware manager for the job status
-	status, err := hwmgrClient.CheckResourceGroupRequest(ctx, jobId)
+	status, failReason, err := hwmgrClient.CheckJobStatus(ctx, jobId)
 	if err != nil {
-		a.Logger.InfoContext(ctx, "Job progress check failed", slog.String("error", err.Error()))
+		a.Logger.InfoContext(ctx, "Resource group check failed", slog.String("error", err.Error()))
 		return result, fmt.Errorf("failed to check job progress, jobId=%s: %w", jobId, err)
 	}
 
-	if status == nil || status.Brief == nil || status.Brief.Status == nil {
-		a.Logger.InfoContext(ctx, "Job progress check missing data", slog.Any("status", status))
-		return result, fmt.Errorf("job progress check missing data, jobId=%s: %w", jobId, err)
-	}
-
 	// Process the status response
-	switch *status.Brief.Status {
-	case "started":
-		a.Logger.InfoContext(ctx, "Job has started")
+	switch status {
+	case hwmgrclient.JobStatusInProgress:
 		return utils.RequeueWithShortInterval(), nil
-	case "pending":
-		a.Logger.InfoContext(ctx, "Job is pending")
-		return utils.RequeueWithShortInterval(), nil
-	case "completed":
+	case hwmgrclient.JobStatusFailed:
+		a.Logger.InfoContext(ctx, "Resource group creation failed", slog.String("failReason", failReason))
+		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
+			fmt.Sprintf("Resource group creation failed: %s", failReason)); err != nil {
+			return utils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+		}
+		return result, fmt.Errorf("resource group creation failed, jobId=%s: %s", jobId, failReason)
+	case hwmgrclient.JobStatusCompleted:
 		a.Logger.InfoContext(ctx, "Job has completed")
 	default:
-		a.Logger.InfoContext(ctx, "Job has failed", slog.Any("status", status))
-		msg := fmt.Sprintf("resource group creation has failed: status=%s", *status.Brief.Status)
-		if status.Brief.FailReason != nil {
-			msg += fmt.Sprintf(", message=%s", *status.Brief.FailReason)
-		}
-		return result, fmt.Errorf("%s", msg)
+		a.Logger.InfoContext(ctx, "Resource group check returned unknown status", slog.String("failReason", failReason))
+		return result, fmt.Errorf("failed to check job progress, jobId=%s: %s", jobId, failReason)
 	}
 
 	// The job has completed. Get the resource group data from the hardware manager
@@ -212,7 +203,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 					continue
 				} else {
 					// TODO: Validate that the CR is current. For now, fail, as something went wrong
-					a.Logger.InfoContext(ctx, "Node previously allocted, but not in nodepool properties",
+					a.Logger.InfoContext(ctx, "Node previously allocated, but not in nodepool properties",
 						slog.String("nodename", nodename),
 						slog.String("nodeId", *node.Id))
 					if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
@@ -283,143 +274,145 @@ func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 		time.Sleep(time.Second * 10)
 		a.Logger.InfoContext(ctx, "Checking deletion job progress")
 
-		status, err := hwmgrClient.CheckResourceGroupRequest(ctx, jobId)
+		status, failReason, err := hwmgrClient.CheckJobStatus(ctx, jobId)
 		if err != nil {
-			a.Logger.InfoContext(ctx, "Job progress check failed", slog.String("error", err.Error()))
-			return fmt.Errorf("job progress check failed: %w", err)
+			a.Logger.InfoContext(ctx, "Deletion job progress check failed", slog.String("error", err.Error()))
+			return fmt.Errorf("deletion job progress check failed: %w", err)
 		}
 
-		if status == nil || status.Brief == nil || status.Brief.Status == nil {
-			a.Logger.InfoContext(ctx, "Job progress check missing data", slog.Any("status", status))
-			return fmt.Errorf("job progress check returned with no data: %v", status)
-		}
-
-		switch *status.Brief.Status {
-		case "started":
-			a.Logger.InfoContext(ctx, "Job has started")
-			continue
-		case "completed":
-			a.Logger.InfoContext(ctx, "Job has completed")
-			finished = true
-		default:
-			a.Logger.InfoContext(ctx, "Job has failed", slog.Any("status", status))
-			msg := fmt.Sprintf("resource group deletion has failed: status=%s", *status.Brief.Status)
-			if status.Brief.FailReason != nil {
-				msg += fmt.Sprintf(", message=%s", *status.Brief.FailReason)
-			}
-			return fmt.Errorf("%s", msg)
-		}
+		// TODO: Currently, the hardware manager is clearing the job immediately on deletion, so the check fails
+		a.Logger.InfoContext(ctx, "Deletion job progress check returned", slog.Any("status", status), slog.String("failReason", failReason))
 	}
 
 	return nil
 }
 
-func (a *Adaptor) checkNodeUpgradeProcess(
-	ctx context.Context,
-	allocatedNodes []string) ([]*hwmgmtv1alpha1.Node, []*hwmgmtv1alpha1.Node, error) {
-
-	var upgradedNodes []*hwmgmtv1alpha1.Node
-	var nodesStillUpgrading []*hwmgmtv1alpha1.Node
-
-	for _, name := range allocatedNodes {
-		// Fetch the latest version of each node to ensure up-to-date status
-		updatedNode, err := utils.GetNode(ctx, a.Client, a.Namespace, name)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get node %s: %w", name, err)
-		}
-
-		if updatedNode.Status.HwProfile == updatedNode.Spec.HwProfile {
-			// Node has completed the upgrade
-			upgradedNodes = append(upgradedNodes, updatedNode)
-		} else {
-			updatedNode.Status.HwProfile = updatedNode.Spec.HwProfile
-			if err := utils.UpdateK8sCRStatus(ctx, a.Client, updatedNode); err != nil {
-				return nil, nil, fmt.Errorf("failed to update status for node %s: %w", updatedNode.Name, err)
-			}
-
-			// TODO: notify Dell hwmgr on successful node update
-			nodesStillUpgrading = append(nodesStillUpgrading, updatedNode)
-		}
-	}
-
-	return upgradedNodes, nodesStillUpgrading, nil
-}
-
-// GetAllocatedNodes gets a list of nodes allocated for the specified NodePool CR
-func (a *Adaptor) GetAllocatedNodes(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (allocatedNodes []string, err error) {
-
-	allocatedNodes = []string{}
-
-	for _, ng := range nodepool.Spec.NodeGroup {
-		allocatedNodes = append(allocatedNodes, ng.NodePoolData.Name)
-	}
-	if len(allocatedNodes) == 0 {
-		return allocatedNodes, fmt.Errorf("failed to allocate nodes from nodepool:%s", nodepool.GetName())
-	}
-	return allocatedNodes, nil
-}
-
 func (a *Adaptor) handleNodePoolConfiguring(
 	ctx context.Context,
+	hwmgrClient *hwmgrclient.HardwareManagerClient,
 	nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
 
-	var nodesToCheck []*hwmgmtv1alpha1.Node // To track nodes that we actually attempted to upgrade
 	var result ctrl.Result
 
-	a.Logger.InfoContext(ctx, "Handling Node Pool Configuring, name="+nodepool.Name)
+	a.Logger.InfoContext(ctx, "Handling Node Pool Configuring")
 
-	allocatedNodes := nodepool.Status.Properties.NodeNames
-
-	if len(allocatedNodes) == 0 {
-		return ctrl.Result{}, fmt.Errorf("failed to get allocated nodes for Node Pool:%s", nodepool.Name)
-	}
-
-	// Stage 1: Initiate upgrades by updating node.Spec.HwProfile as necessary
-	for _, name := range allocatedNodes {
-		node, err := utils.GetNode(ctx, a.Client, a.Namespace, name)
-		if err != nil {
-			return utils.RequeueWithShortInterval(), err
-		}
-		// Check each node against each nodegroup in the node pool spec
-		for _, nodegroup := range nodepool.Spec.NodeGroup {
-			if node.Spec.GroupName != nodegroup.NodePoolData.Name || node.Spec.HwProfile == nodegroup.NodePoolData.HwProfile {
-				continue
-			}
-			// Node needs an upgrade, so update Spec.HwProfile
-			patch := client.MergeFrom(node.DeepCopy())
-			node.Spec.HwProfile = nodegroup.NodePoolData.HwProfile
-			if err = a.Client.Patch(ctx, node, patch); err != nil {
-				return utils.RequeueWithShortInterval(), fmt.Errorf("failed to patch Node %s in namespace %s: %w", node.Name, node.Namespace, err)
-			}
-			nodesToCheck = append(nodesToCheck, node) // Track nodes we attempted to upgrade
-			break
-		}
-	}
-
-	// Requeue if there are nodes to check
-	if len(nodesToCheck) > 0 {
-		return utils.RequeueWithCustomInterval(30 * time.Second), nil
-	}
-
-	// Stage 2: Verify and track completion of upgrades
-	_, nodesStillUpgrading, err := a.checkNodeUpgradeProcess(ctx, allocatedNodes)
+	nodelist, err := utils.GetChildNodes(ctx, a.Logger, a.Client, nodepool)
 	if err != nil {
-		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to check upgrade status for nodes: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodepool.Name, err)
 	}
 
-	// Update NodePool status if all nodes are upgraded
-	if len(nodesStillUpgrading) == 0 {
-		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
-			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
-			return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+	a.Logger.InfoContext(ctx, "Checking for node with profile update in-progress")
+
+	// Search for a node that is currently being updated
+	if node := utils.FindNodeUpdateInProgress(nodelist); node != nil {
+		// A node has an update already in progress
+		annotation := node.GetAnnotations()
+		if annotation == nil {
+			return result, fmt.Errorf("annotations are missing from node %s in namespace %s", node.Name, node.Namespace)
 		}
-		// Update the Node Pool hwMgrPlugin status
-		if err = utils.UpdateNodePoolPluginStatus(ctx, a.Client, nodepool); err != nil {
-			return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+
+		// Ensure the jobId annotation exists and is not empty
+		jobId, exists := annotation[JobIdAnnotation]
+		if !exists || jobId == "" {
+			return result, fmt.Errorf("%s annotation is missing or empty from node %s", JobIdAnnotation, node.Name)
 		}
-	} else {
-		// Requeue if there are still nodes upgrading
+
+		// Query the hardware manager for the job status
+		status, failReason, err := hwmgrClient.CheckJobStatus(ctx, jobId)
+		if err != nil {
+			a.Logger.InfoContext(ctx, "Profile update job progress check failed", slog.String("error", err.Error()))
+			return result, fmt.Errorf("failed to check profile update job progress, jobId=%s: %w", jobId, err)
+		}
+
+		// Process the status response
+		switch status {
+		case hwmgrclient.JobStatusInProgress:
+			return utils.RequeueWithShortInterval(), nil
+		case hwmgrclient.JobStatusFailed:
+			a.Logger.InfoContext(ctx, "Profile update creation failed", slog.String("failReason", failReason))
+			if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
+				hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
+				fmt.Sprintf("Profile update creation failed: %s", failReason)); err != nil {
+				return utils.RequeueWithMediumInterval(),
+					fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+			}
+			// TODO: Mark the config change as failed
+			return result, fmt.Errorf("profile update creation failed, jobId=%s: %s", jobId, failReason)
+		case hwmgrclient.JobStatusCompleted:
+			a.Logger.InfoContext(ctx, "Profile update job has completed")
+		default:
+			a.Logger.InfoContext(ctx, "Profile update check returned unknown status", slog.String("failReason", failReason))
+			return result, fmt.Errorf("failed to check profile update job progress, jobId=%s: %s", jobId, failReason)
+		}
+
+		// Node update is complete
+		a.Logger.InfoContext(ctx, "Node update complete", slog.String("nodename", node.Name))
+		node.Status.HwProfile = node.Spec.HwProfile
+		if err := utils.UpdateK8sCRStatus(ctx, a.Client, node); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status for node %s: %w", node.Name, err)
+		}
+
+		return utils.RequeueImmediately(), nil
+	}
+
+	a.Logger.InfoContext(ctx, "Checking for nodes to update")
+
+	// There are no nodes currently in-progress, so we can look for the next one to start updating
+	for _, nodegroup := range nodepool.Spec.NodeGroup {
+		newHwProfile := nodegroup.NodePoolData.HwProfile
+		node := utils.FindNextNodeToUpdate(nodelist, nodegroup.NodePoolData.Name, newHwProfile)
+		if node == nil {
+			// No more nodes to update in this nodegroup
+			continue
+		}
+
+		a.Logger.InfoContext(ctx, "Issuing profile update to node",
+			slog.String("hwMgrNodeId", node.Spec.HwMgrNodeId),
+			slog.String("curHwProfile", node.Spec.HwProfile),
+			slog.String("newHwProfile", newHwProfile))
+
+		jobId, err := hwmgrClient.UpdateResourceProfile(ctx, node, newHwProfile)
+		if err != nil {
+			return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update resource for node %s: %w", node.Name, err)
+		}
+
+		a.Logger.InfoContext(ctx, "Updating Node CR with new profile",
+			slog.String("nodename", node.Name),
+			slog.String("newHwProfile", newHwProfile),
+			slog.String("jobId", jobId),
+		)
+
+		// Copy the current node object for patching
+		patch := client.MergeFrom(node.DeepCopy())
+
+		// Set the new profile in the spec
+		node.Spec.HwProfile = newHwProfile
+
+		// Record the jobId in an annotation
+		annotations := node.GetAnnotations()
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations[JobIdAnnotation] = jobId
+		node.SetAnnotations(annotations)
+
+		if err = a.Client.Patch(ctx, node, patch); err != nil {
+			return utils.RequeueWithShortInterval(), fmt.Errorf("failed to patch Node %s in namespace %s: %w", node.Name, node.Namespace, err)
+		}
+
+		// Requeue to check update progress
 		return utils.RequeueWithMediumInterval(), nil
+	}
+
+	// All nodes have been updated
+	a.Logger.InfoContext(ctx, "All nodes have been updated to new profile")
+	if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
+		hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
+		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+	}
+	// Update the Node Pool hwMgrPlugin status
+	if err = utils.UpdateNodePoolPluginStatus(ctx, a.Client, nodepool); err != nil {
+		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
 	}
 
 	return result, nil
@@ -443,5 +436,5 @@ func (a *Adaptor) HandleNodePoolSpecChanged(
 			fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
 	}
 
-	return a.handleNodePoolConfiguring(ctx, nodepool)
+	return a.handleNodePoolConfiguring(ctx, hwmgrClient, nodepool)
 }
