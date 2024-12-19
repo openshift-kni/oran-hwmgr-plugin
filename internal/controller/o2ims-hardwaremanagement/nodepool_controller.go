@@ -113,6 +113,15 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Setup Node CRD indexer
+	nodeIndexFunc := func(obj client.Object) []string {
+		return []string{obj.(*hwmgmtv1alpha1.Node).Spec.NodePool}
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &hwmgmtv1alpha1.Node{}, utils.NodeSpecNodePoolKey, nodeIndexFunc); err != nil {
+		return fmt.Errorf("failed to setup node indexer: %w", err)
+	}
+
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&hwmgmtv1alpha1.NodePool{}).
 		Complete(r); err != nil {

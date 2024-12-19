@@ -29,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
@@ -64,7 +63,7 @@ func (a *Adaptor) AllocateNode(ctx context.Context, nodepool *hwmgmtv1alpha1.Nod
 		remaining := nodegroup.Size - len(used)
 		if remaining <= 0 {
 			// This group is allocated
-			a.Logger.InfoContext(ctx, "nodegroup is fully allocated", "nodegroup", nodegroup.NodePoolData.Name)
+			a.Logger.InfoContext(ctx, "nodegroup is fully allocated", slog.String("nodegroup", nodegroup.NodePoolData.Name))
 			continue
 		}
 
@@ -117,7 +116,7 @@ func bmcSecretName(nodename string) string {
 
 // CreateBMCSecret creates the bmc-secret for a node
 func (a *Adaptor) CreateBMCSecret(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool, nodename, usernameBase64, passwordBase64 string) error {
-	a.Logger.InfoContext(ctx, "Creating bmc-secret:", "nodename", nodename)
+	a.Logger.InfoContext(ctx, "Creating bmc-secret:", slog.String("nodename", nodename))
 
 	secretName := bmcSecretName(nodename)
 
@@ -152,26 +151,6 @@ func (a *Adaptor) CreateBMCSecret(ctx context.Context, nodepool *hwmgmtv1alpha1.
 
 	if err = utils.CreateK8sCR(ctx, a.Client, bmcSecret, nil, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create bmc-secret for node %s: %w", nodename, err)
-	}
-
-	return nil
-}
-
-// DeleteBMCSecret deletes the bmc-secret for a node
-func (a *Adaptor) DeleteBMCSecret(ctx context.Context, nodename string) error {
-	a.Logger.InfoContext(ctx, "Deleting bmc-secret:", "nodename", nodename)
-
-	secretName := bmcSecretName(nodename)
-
-	bmcSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: a.Namespace,
-		},
-	}
-
-	if err := a.Client.Delete(ctx, bmcSecret); client.IgnoreNotFound(err) != nil {
-		return fmt.Errorf("failed to delete bmc-secret for node %s: %w", nodename, err)
 	}
 
 	return nil
@@ -242,24 +221,6 @@ func (a *Adaptor) UpdateNodeStatus(ctx context.Context, nodename string, info cm
 	node.Status.HwProfile = hwprofile
 	if err := utils.UpdateK8sCRStatus(ctx, a.Client, node); err != nil {
 		return fmt.Errorf("failed to update status for node %s: %w", nodename, err)
-	}
-
-	return nil
-}
-
-// DeleteNode deletes a Node CR
-func (a *Adaptor) DeleteNode(ctx context.Context, nodename string) error {
-	a.Logger.InfoContext(ctx, "Deleting node", slog.String("nodename", nodename))
-
-	node := &hwmgmtv1alpha1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodename,
-			Namespace: a.Namespace,
-		},
-	}
-
-	if err := a.Client.Delete(ctx, node); client.IgnoreNotFound(err) != nil {
-		return fmt.Errorf("failed to delete Node: %w", err)
 	}
 
 	return nil

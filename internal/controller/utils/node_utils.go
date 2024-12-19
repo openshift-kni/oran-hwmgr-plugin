@@ -19,24 +19,28 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
-	HwMgrNodeId = "hwmgrNodeId"
+	HwMgrNodeId         = "hwmgrNodeId"
+	NodeSpecNodePoolKey = "spec.nodePool"
 )
 
 // GetNode get a node resource for a provided name
-func GetNode(ctx context.Context, c client.Client, namespace, nodename string) (*hwmgmtv1alpha1.Node, error) {
+func GetNode(
+	ctx context.Context,
+	logger *slog.Logger,
+	c client.Client,
+	namespace, nodename string) (*hwmgmtv1alpha1.Node, error) {
 
-	log := logf.FromContext(ctx)
-	log.Info(fmt.Sprintf("Getting Node:%s", nodename))
+	logger.InfoContext(ctx, "Getting Node", slog.String("nodename", nodename))
 
 	node := &hwmgmtv1alpha1.Node{}
 
@@ -60,4 +64,49 @@ func FindNodeInList(nodelist hwmgmtv1alpha1.NodeList, hwMgrId, nodeId string) st
 		}
 	}
 	return ""
+}
+
+// GetChildNodes gets a list of nodes allocated to a NodePool
+func GetChildNodes(
+	ctx context.Context,
+	logger *slog.Logger,
+	c client.Client,
+	nodepool *hwmgmtv1alpha1.NodePool) (*hwmgmtv1alpha1.NodeList, error) {
+
+	nodelist := &hwmgmtv1alpha1.NodeList{}
+
+	opts := []client.ListOption{
+		client.MatchingFields{"spec.nodePool": nodepool.Name},
+	}
+
+	if err := RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		return c.List(ctx, nodelist, opts...)
+	}); err != nil {
+		logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
+		return nil, fmt.Errorf("failed to query node list: %w", err)
+	}
+
+	return nodelist, nil
+}
+
+// FindNodeUpdateInProgress scans the nodelist to find the first node with HwProfile update in progress
+func FindNodeUpdateInProgress(nodelist *hwmgmtv1alpha1.NodeList) *hwmgmtv1alpha1.Node {
+	for _, node := range nodelist.Items {
+		if node.Spec.HwProfile != node.Status.HwProfile {
+			return &node
+		}
+	}
+
+	return nil
+}
+
+// FindNextNodeToUpdate scans the nodelist to find the first node with stale HwProfile
+func FindNextNodeToUpdate(nodelist *hwmgmtv1alpha1.NodeList, groupname, newHwProfile string) *hwmgmtv1alpha1.Node {
+	for _, node := range nodelist.Items {
+		if groupname == node.Spec.GroupName && newHwProfile != node.Spec.HwProfile {
+			return &node
+		}
+	}
+
+	return nil
 }

@@ -77,7 +77,7 @@ const (
 
 func (a *Adaptor) determineAction(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) fsmAction {
 	if len(nodepool.Status.Conditions) == 0 {
-		a.Logger.InfoContext(ctx, "Handling Create NodePool request, name="+nodepool.Name)
+		a.Logger.InfoContext(ctx, "Handling Create NodePool request")
 		return NodePoolFSMCreate
 	}
 
@@ -88,10 +88,10 @@ func (a *Adaptor) determineAction(ctx context.Context, nodepool *hwmgmtv1alpha1.
 		if provisionedCondition.Status == metav1.ConditionTrue {
 			// Check if the generation has changed
 			if nodepool.ObjectMeta.Generation != nodepool.Status.HwMgrPlugin.ObservedGeneration {
-				a.Logger.InfoContext(ctx, "Handling NodePool Spec change, name="+nodepool.Name)
+				a.Logger.InfoContext(ctx, "Handling NodePool Spec change")
 				return NodePoolFSMSpecChanged
 			}
-			a.Logger.InfoContext(ctx, "NodePool request in Provisioned state, name="+nodepool.Name)
+			a.Logger.InfoContext(ctx, "NodePool request in Provisioned state")
 			return NodePoolFSMNoop
 		}
 
@@ -120,7 +120,7 @@ func (a *Adaptor) HandleNodePool(ctx context.Context, hwmgr *pluginv1alpha1.Hard
 }
 
 func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) error {
-	a.Logger.InfoContext(ctx, "Finalizing nodepool", "name", nodepool.Name)
+	a.Logger.InfoContext(ctx, "Finalizing nodepool")
 
 	if err := a.ReleaseNodePool(ctx, hwmgr, nodepool); err != nil {
 		return fmt.Errorf("failed to release nodepool %s: %w", nodepool.Name, err)

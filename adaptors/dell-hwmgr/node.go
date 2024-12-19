@@ -213,7 +213,7 @@ func (a *Adaptor) CreateBMCSecret(
 	nodepool *hwmgmtv1alpha1.NodePool,
 	nodename string,
 	resource hwmgrapi.RhprotoResource) error {
-	a.Logger.InfoContext(ctx, "Creating bmc-secret:", "nodename", nodename)
+	a.Logger.InfoContext(ctx, "Creating bmc-secret")
 
 	remoteSecretKey := *resource.ResourceAttribute.Compute.Lom.Password
 	remoteSecret, err := hwmgrClient.GetSecret(ctx, remoteSecretKey)

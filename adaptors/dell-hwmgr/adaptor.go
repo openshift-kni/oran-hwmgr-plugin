@@ -90,15 +90,15 @@ func (a *Adaptor) determineAction(ctx context.Context, nodepool *hwmgmtv1alpha1.
 		if provisionedCondition.Status == metav1.ConditionTrue {
 			// Check if the generation has changed
 			if nodepool.ObjectMeta.Generation != nodepool.Status.HwMgrPlugin.ObservedGeneration {
-				a.Logger.InfoContext(ctx, "Handling NodePool Spec change, name="+nodepool.Name)
+				a.Logger.InfoContext(ctx, "Handling NodePool Spec change")
 				return NodePoolFSMSpecChanged
 			}
-			a.Logger.InfoContext(ctx, "NodePool request in Provisioned state, name="+nodepool.Name)
+			a.Logger.InfoContext(ctx, "NodePool request in Provisioned state")
 			return NodePoolFSMNoop
 		}
 
 		if provisionedCondition.Reason == string(hwmgmtv1alpha1.Failed) {
-			a.Logger.InfoContext(ctx, "NodePool request in Failed state"+nodepool.Name)
+			a.Logger.InfoContext(ctx, "NodePool request in Failed state")
 			return NodePoolFSMNoop
 		}
 

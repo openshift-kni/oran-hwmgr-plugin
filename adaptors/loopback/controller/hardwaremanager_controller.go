@@ -22,6 +22,7 @@ import (
 	"log/slog"
 
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -77,6 +78,8 @@ func (r *HardwareManagerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		// Nothing to do
 		return
 	}
+
+	ctx = logging.AppendCtx(ctx, slog.String("hwmgr", hwmgr.Name))
 
 	hwmgr.Status.ObservedGeneration = hwmgr.Generation
 
