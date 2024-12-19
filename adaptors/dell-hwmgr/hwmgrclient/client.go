@@ -346,7 +346,7 @@ func (c *HardwareManagerClient) ValidateResourceGroup(
 	if *resourceGroup.ResourceSelectors != nil {
 		resourceSelector := *resourceGroup.ResourceSelectors
 		for _, nodegroup := range nodepool.Spec.NodeGroup {
-			nodeName := node.NodePoolData.Name
+			nodegroupName := node.NodePoolData.Name
 			if resource, exists := resourceSelector[nodeName]; exists {
 				if resource.NumResources != nil {
 					// Ensure expected number of nodes are present
