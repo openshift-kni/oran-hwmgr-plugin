@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/hwmgrclient"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,6 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	errs "errors"
 
 	adaptors "github.com/openshift-kni/oran-hwmgr-plugin/adaptors"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
@@ -90,6 +95,22 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 			if err := r.HwMgrAdaptor.HandleNodePoolDeletion(ctx, nodepool); err != nil {
 				// Log the failure and continue, to remove the finalizer and allow the deletion
 				r.Logger.InfoContext(ctx, "Failed HandleNodePoolDeletion", slog.String("error", err.Error()))
+
+				// Example of handling a specific type of error (AuthNoTokenErr): the token was not recovered from the
+				// hwmgr (ie: network timeout) and we decide to give it another shot (requeue)
+				var ce hwmgrclient.HardwareManagerClientErr
+				if errs.As(err, &ce) {
+					if ce.Type == hwmgrclient.AuthNoTokenErr {
+						if err := utils.UpdateNodePoolStatusCondition(ctx, r.HwMgrAdaptor.Client, nodepool,
+							"Deleted", hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
+							"NodePool deletion failed: "+ce.Message); err != nil {
+							return utils.RequeueWithMediumInterval(),
+								fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+						}
+						return utils.RequeueWithMediumInterval(), err
+					}
+					// TODO: cleanup this status condition
+				}
 			}
 
 			if err := utils.NodepoolRemoveFinalizer(ctx, r.Client, nodepool); err != nil {
