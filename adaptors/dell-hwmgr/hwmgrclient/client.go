@@ -37,6 +37,24 @@ const (
 	DefaultTenant = "default_tenant"
 )
 
+type TypeErr int
+
+const (
+	AuthSecretErr = iota + 1
+	AuthNoTokenErr
+	AuthTokenErr
+)
+
+// HardwareManagerClientErr indicates the specific type of error for a more granular error management
+type HardwareManagerClientErr struct {
+	Type    TypeErr
+	Message string
+}
+
+func (ce HardwareManagerClientErr) Error() string {
+	return ce.Message
+}
+
 // HardwareManagerClient provides functions for calling the hardware manager APIs
 type HardwareManagerClient struct {
 	rtclient    client.Client
@@ -59,22 +77,25 @@ func (c *HardwareManagerClient) GetTenant() string {
 func (c *HardwareManagerClient) GetToken(ctx context.Context) (string, error) {
 	clientSecrets, err := utils.GetSecret(ctx, c.rtclient, c.hwmgr.Spec.DellData.AuthSecret, c.Namespace)
 	if err != nil {
-		return "", fmt.Errorf("failed to get client secret: %w", err)
+		return "", HardwareManagerClientErr{Type: AuthSecretErr, Message: fmt.Sprintf("failed to get client secret: %v", err)}
 	}
 
 	clientId, err := utils.GetSecretField(clientSecrets, "client-id")
 	if err != nil {
-		return "", fmt.Errorf("failed to get client-id from secret: %s, %w", c.hwmgr.Spec.DellData.AuthSecret, err)
+		return "", HardwareManagerClientErr{Type: AuthSecretErr, Message: fmt.Sprintf("failed to get client-id from secret: %s, %v",
+			c.hwmgr.Spec.DellData.AuthSecret, err)}
 	}
 
 	username, err := utils.GetSecretField(clientSecrets, corev1.BasicAuthUsernameKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to get %s from secret: %s, %w", corev1.BasicAuthUsernameKey, c.hwmgr.Spec.DellData.AuthSecret, err)
+		return "", HardwareManagerClientErr{Type: AuthSecretErr, Message: fmt.Sprintf("failed to get %s from secret: %s, %v",
+			corev1.BasicAuthUsernameKey, c.hwmgr.Spec.DellData.AuthSecret, err)}
 	}
 
 	password, err := utils.GetSecretField(clientSecrets, corev1.BasicAuthPasswordKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to get %s from secret: %s, %w", corev1.BasicAuthPasswordKey, c.hwmgr.Spec.DellData.AuthSecret, err)
+		return "", HardwareManagerClientErr{Type: AuthSecretErr, Message: fmt.Sprintf("failed to get %s from secret: %s, %v",
+			corev1.BasicAuthPasswordKey, c.hwmgr.Spec.DellData.AuthSecret, err)}
 	}
 
 	grant_type := string(pluginv1alpha1.OAuthGrantTypes.Password)
@@ -88,21 +109,24 @@ func (c *HardwareManagerClient) GetToken(ctx context.Context) (string, error) {
 
 	tokenrsp, err := c.HwmgrClient.GetTokenWithResponse(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("failed to get token: response: %v, err: %w", tokenrsp, err)
+		return "", HardwareManagerClientErr{Type: AuthNoTokenErr, Message: fmt.Sprintf("failed to get token: response: %v, err: %v",
+			tokenrsp, err)}
 	}
 
 	if tokenrsp.StatusCode() != http.StatusOK {
-		return "", fmt.Errorf("token request failed with status %s (%d), message=%s",
-			tokenrsp.Status(), tokenrsp.StatusCode(), string(tokenrsp.Body))
+		return "", HardwareManagerClientErr{Type: AuthTokenErr, Message: fmt.Sprintf("token request failed with status %s (%d), message=%s",
+			tokenrsp.Status(), tokenrsp.StatusCode(), string(tokenrsp.Body))}
 	}
 
 	var tokenData hwmgrapi.RhprotoGetTokenResponseBody
 	if err := json.Unmarshal(tokenrsp.Body, &tokenData); err != nil {
-		return "", fmt.Errorf("failed to parse token: response: %v, err: %w", tokenrsp, err)
+		return "", HardwareManagerClientErr{Type: AuthTokenErr, Message: fmt.Sprintf("failed to parse token: response: %v, err: %v",
+			tokenrsp, err)}
 	}
 
 	if tokenData.AccessToken == nil {
-		return "", fmt.Errorf("failed to get token: access_token field empty: %v", tokenrsp)
+		return "", HardwareManagerClientErr{Type: AuthTokenErr, Message: fmt.Sprintf("failed to get token: access_token field empty: %v",
+			tokenrsp)}
 	}
 	return *tokenData.AccessToken, nil
 }
