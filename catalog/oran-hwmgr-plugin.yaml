@@ -1,0 +1,140 @@
+---
+image: quay.io/openshift-kni/oran-hwmgr-plugin-bundle:4.18.0
+name: oran-hwmgr-plugin.v4.18.0
+package: oran-hwmgr-plugin
+properties:
+- type: olm.gvk
+  value:
+    group: hwmgr-plugin.oran.openshift.io
+    kind: HardwareManager
+    version: v1alpha1
+- type: olm.package
+  value:
+    packageName: oran-hwmgr-plugin
+    version: 4.18.0
+- type: olm.csv.metadata
+  value:
+    annotations:
+      alm-examples: |-
+        [
+          {
+            "apiVersion": "hwmgr-plugin.oran.openshift.io/v1alpha1",
+            "kind": "HardwareManager",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/created-by": "oran-hwmgr-plugin",
+                "app.kubernetes.io/instance": "hardwaremanager-sample",
+                "app.kubernetes.io/managed-by": "kustomize",
+                "app.kubernetes.io/name": "hardwaremanager",
+                "app.kubernetes.io/part-of": "oran-hwmgr-plugin"
+              },
+              "name": "hardwaremanager-sample"
+            },
+            "spec": {
+              "adaptorId": "dell-hwmgr",
+              "dellData": {
+                "user": "admin"
+              }
+            },
+            "status": {
+              "observedGeneration": 1
+            }
+          }
+        ]
+      capabilities: Basic Install
+      containerImage: registry-proxy.engineering.redhat.com/rh-osbs/openshift4-oran-hwmgr-plugin-rhel9-operator
+      description: The O-Cloud Hardware Manager Plugin
+      features.operators.openshift.io/cnf: "false"
+      features.operators.openshift.io/cni: "false"
+      features.operators.openshift.io/csi: "false"
+      features.operators.openshift.io/disconnected: "true"
+      features.operators.openshift.io/fips-compliant: "true"
+      features.operators.openshift.io/proxy-aware: "false"
+      features.operators.openshift.io/tls-profiles: "false"
+      features.operators.openshift.io/token-auth-aws: "false"
+      features.operators.openshift.io/token-auth-azure: "false"
+      features.operators.openshift.io/token-auth-gcp: "false"
+      olm.skipRange: '>=4.16.0 <4.18'
+      operators.openshift.io/infrastructure-features: '["disconnected"]'
+      operators.operatorframework.io/builder: operator-sdk-v1.36.1
+      operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+      provider: Red Hat
+      repository: https://github.com/rauhersu/oran-hwmgr-plugin
+      support: Red Hat
+    apiServiceDefinitions: {}
+    crdDescriptions:
+      owned:
+      - description: HardwareManager is the Schema for the hardwaremanagers API
+        displayName: Hardware Manager
+        kind: HardwareManager
+        name: hardwaremanagers.hwmgr-plugin.oran.openshift.io
+        resources:
+        - kind: Service
+          name: policy-engine-service
+          version: v1
+        specDescriptors:
+        - description: The adaptor ID
+          displayName: Adaptor ID
+          path: adaptorId
+        - description: Config data for an instance of the dell-hwmgr adaptor
+          displayName: Dell Data
+          path: dellData
+        - displayName: Api Url
+          path: dellData.apiUrl
+        - displayName: Auth Secret
+          path: dellData.authSecret
+        - description: |-
+            CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+            with a hardware manager that has its TLS certificate signed by a non-public CA certificate.
+          displayName: Custom CA Certificates
+          path: dellData.caBundleName
+          x-descriptors:
+          - urn:alm:descriptor:com.tectonic.ui:text
+        - description: Config data for an instance of the loopback adaptor
+          displayName: Loopback Data
+          path: loopbackData
+        - description: A test string
+          displayName: Addtional Info
+          path: loopbackData.additionalInfo
+        statusDescriptors:
+        - description: Conditions describe the state of the UpdateService resource.
+          displayName: Conditions
+          path: conditions
+        - displayName: Observed Generation
+          path: observedGeneration
+        - description: ResourcePools provides a per-site list of resource pools
+          displayName: Resource Pools
+          path: resourcePools
+        version: v1alpha1
+    description: O-Cloud Hardware Manager Plugin
+    displayName: O-Cloud Hardware Manager Plugin
+    installModes:
+    - supported: true
+      type: OwnNamespace
+    - supported: false
+      type: SingleNamespace
+    - supported: false
+      type: MultiNamespace
+    - supported: false
+      type: AllNamespaces
+    keywords:
+    - ORAN
+    - plugin
+    links:
+    - name: Oran Hwmgr Plugin
+      url: https://oran-hwmgr-plugin.domain
+    maintainers:
+    - email: dpenney@redhat.com
+      name: Don Penney
+    maturity: alpha
+    minKubeVersion: 1.28.0
+    provider:
+      name: Red Hat
+relatedImages:
+- image: quay.io/openshift-kni/oran-hwmgr-plugin-bundle:4.18.0
+  name: ""
+- image: quay.io/openshift-kni/oran-hwmgr-plugin:4.18.0
+  name: ""
+- image: quay.io/openshift/origin-kube-rbac-proxy:4.18
+  name: ""
+schema: olm.bundle

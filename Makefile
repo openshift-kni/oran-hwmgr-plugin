@@ -22,6 +22,8 @@ ginkgo_flags:=
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 4.18.0
 
+PACKAGE_NAME ?= oran-hwmgr-plugin
+
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
@@ -66,7 +68,7 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.36.1
+OPERATOR_SDK_VERSION ?= v1.38.0
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
@@ -327,14 +329,20 @@ endif
 # Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
 # This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
+.PHONY: catalog
+catalog: opm ## Build a catalog.
+	hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
+	$(OPM) validate catalog
+
 .PHONY: catalog-build
-catalog-build: opm ## Build a catalog image.
-	$(OPM) index add --container-tool $(CONTAINER_TOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
+catalog-build: catalog ## Build a catalog image.
+	$(CONTAINER_TOOL) build -f catalog.Dockerfile -t $(CATALOG_IMG) .
 
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(CONTAINER_TOOL) push ${CATALOG_IMG}
 
 .PHONY: test tests
 test tests: manifests generate fmt vet envtest ## Run tests.
