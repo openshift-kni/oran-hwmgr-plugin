@@ -1,0 +1,10 @@
+---
+defaultChannel: alpha
+name: oran-hwmgr-plugin
+schema: olm.package
+---
+schema: olm.channel
+package: oran-hwmgr-plugin
+name: alpha
+entries:
+  - name: oran-hwmgr-plugin.v4.18.0
