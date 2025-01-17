@@ -407,8 +407,7 @@ lint:
 
 .PHONY: deps-update
 deps-update:	controller-gen kustomize
-	go mod tidy
-	go mod vendor
+	hack/update-deps.sh
 
 .PHONY: ci-job
 ci-job: deps-update generate fmt vet lint test bundle-check
