@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -142,13 +144,14 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 	cmExists, err := DoesK8SResourceExist(
 		ctx, c, name, namespace, existingConfigmap)
 	if err != nil {
-		return nil, err
+		return nil, typederrors.NewConfigMapError(fmt.Sprintf(
+			"failed to check configMap %s in the namespace %s", name, namespace), err)
 	}
 
 	if !cmExists {
 		// Check if the configmap is missing
-		return nil, fmt.Errorf(
-			"the ConfigMap %s is not found in the namespace %s", name, namespace)
+		return nil, typederrors.NewConfigMapError(fmt.Sprintf(
+			"the ConfigMap %s is not found in the namespace %s", name, namespace), nil)
 	}
 	return existingConfigmap, nil
 }
@@ -157,7 +160,8 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
 	data, ok := cm.Data[fieldName]
 	if !ok {
-		return data, NewInputError("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName)
+		return data, typederrors.NewConfigMapError(
+			fmt.Sprintf("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName), nil)
 	}
 
 	return data, nil
@@ -175,10 +179,9 @@ func ExtractDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey string) (
 	// Parse the YAML data into a map
 	err = yaml.Unmarshal([]byte(defaults), &validData)
 	if err != nil {
-		return validData, NewInputError(
-			"the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
-			expectedKey, cm.GetName(), err.Error(),
-		)
+		return validData, typederrors.NewConfigMapError(
+			fmt.Sprintf("the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
+				expectedKey, cm.GetName(), err.Error()), err)
 	}
 	return validData, nil
 }
@@ -192,8 +195,8 @@ func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*c
 	}
 
 	if !exists {
-		return nil, NewInputError(
-			"the Secret '%s' is not found in the namespace '%s'", name, namespace)
+		return nil, typederrors.NewSecretError(
+			fmt.Sprintf("the Secret '%s' is not found in the namespace '%s'", name, namespace), nil)
 	}
 	return secret, nil
 }
@@ -202,7 +205,8 @@ func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*c
 func GetSecretField(secret *corev1.Secret, fieldName string) (string, error) {
 	encoded, ok := secret.Data[fieldName]
 	if !ok {
-		return "", NewInputError("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName)
+		return "", typederrors.NewSecretError(
+			fmt.Sprintf("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName), nil)
 	}
 
 	return string(encoded), nil

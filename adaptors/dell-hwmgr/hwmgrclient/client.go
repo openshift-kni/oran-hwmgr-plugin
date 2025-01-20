@@ -23,6 +23,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
+
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 	hwmgrapi "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/generated"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
@@ -97,21 +99,23 @@ func (c *HardwareManagerClient) GetToken(ctx context.Context) (string, error) {
 
 	tokenrsp, err := c.HwmgrClient.GetTokenWithResponse(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("failed to get token: response: %v, err: %w", tokenrsp, err)
+		return "", typederrors.NewTokenError(fmt.Sprintf("failed to get token: response: %v", tokenrsp), err)
 	}
 
 	if tokenrsp.StatusCode() != http.StatusOK {
-		return "", fmt.Errorf("token request failed with status %s (%d), message=%s",
-			tokenrsp.Status(), tokenrsp.StatusCode(), string(tokenrsp.Body))
+		return "", typederrors.NewTokenError(fmt.Sprintf("token request failed with status %s (%d), message=%s",
+			tokenrsp.Status(), tokenrsp.StatusCode(), string(tokenrsp.Body)), nil)
 	}
 
 	var tokenData hwmgrapi.RhprotoGetTokenResponseBody
 	if err := json.Unmarshal(tokenrsp.Body, &tokenData); err != nil {
-		return "", fmt.Errorf("failed to parse token: response: %v, err: %w", tokenrsp, err)
+		return "", typederrors.NewTokenError(
+			fmt.Sprintf("failed to parse token: response: %v", tokenrsp), err)
 	}
 
 	if tokenData.AccessToken == nil {
-		return "", fmt.Errorf("failed to get token: access_token field empty: %v", tokenrsp)
+		return "", typederrors.NewTokenError(
+			fmt.Sprintf("failed to get token: access_token field empty: %v", tokenrsp), nil)
 	}
 	return *tokenData.AccessToken, nil
 }
@@ -135,12 +139,12 @@ func NewClientWithResponses(
 	if hwmgr.Spec.DellData.CaBundleName != nil {
 		cm, err := utils.GetConfigmap(ctx, rtclient, *hwmgr.Spec.DellData.CaBundleName, hwmgr.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get configmap: %s", err.Error())
+			return nil, fmt.Errorf("failed to get configmap: %w", err)
 		}
 
 		caBundle, err = utils.GetConfigMapField(cm, "ca-bundle.pem")
 		if err != nil {
-			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %s", err.Error())
+			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %w", err)
 		}
 	}
 
