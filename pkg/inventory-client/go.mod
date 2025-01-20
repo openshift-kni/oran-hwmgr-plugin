@@ -1,4 +1,4 @@
-module client
+module github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client
 
 go 1.22
 
