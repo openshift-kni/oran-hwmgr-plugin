@@ -126,6 +126,9 @@ linters-settings:
             desc: Should be replaced by standard lib errors package
   wrapcheck:
     ignoreSigs:
+      - .NewConfigMapError(
+      - .NewTokenError
+      - .NewSecretError
       # defaults
       - .Errorf(
       - errors.New(
