@@ -365,6 +365,40 @@ func (c *HardwareManagerClient) GetResourcePools(ctx context.Context) (*hwmgrapi
 	return response.JSON200, nil
 }
 
+// GetServersInventory queries the hardware manager to get the server inventory
+func (c *HardwareManagerClient) GetServersInventory(ctx context.Context) (*hwmgrapi.ApiprotoGetServersInventoryResp, error) {
+	tenant := c.GetTenant()
+	params := hwmgrapi.GetServersInventoryParams{}
+	response, err := c.HwmgrClient.GetServersInventoryWithResponse(ctx, tenant, &params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get servers inventory: response: %v, err: %w", response, err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("server inventory get failed with status %s (%d), message=%s",
+			response.Status(), response.StatusCode(), string(response.Body))
+	}
+
+	return response.JSON200, nil
+}
+
+// GetResources queries the hardware manager to get the resources list
+func (c *HardwareManagerClient) GetResources(ctx context.Context) (*hwmgrapi.ApiprotoGetResourcesResp, error) {
+	tenant := c.GetTenant()
+	body := hwmgrapi.GetResourcesJSONRequestBody{}
+	response, err := c.HwmgrClient.GetResourcesWithResponse(ctx, tenant, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resources: response: %v, err: %w", response, err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("resources get failed with status %s (%d), message=%s",
+			response.Status(), response.StatusCode(), string(response.Body))
+	}
+
+	return response.JSON200, nil
+}
+
 // GetSecret queries the hardware manager to get the Secret data
 func (c *HardwareManagerClient) GetSecret(ctx context.Context, secretKey string) (*hwmgrapi.RhprotoGetSecretsResponseBody, error) {
 	tenant := c.GetTenant()

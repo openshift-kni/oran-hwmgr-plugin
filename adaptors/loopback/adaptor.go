@@ -20,10 +20,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/loopback/controller"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,4 +129,43 @@ func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alp
 	}
 
 	return nil
+}
+
+func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourcePoolInfo, int, error) {
+	var resp []invserver.ResourcePoolInfo
+	_, resources, _, err := a.GetCurrentResources(ctx)
+	if err != nil {
+		return resp, http.StatusServiceUnavailable, fmt.Errorf("unable to get current resources: %w", err)
+	}
+
+	siteId := "n/a"
+	for _, pool := range resources.ResourcePools {
+		resp = append(resp, invserver.ResourcePoolInfo{
+			ResourcePoolId: pool,
+			Description:    pool,
+			Name:           pool,
+			SiteId:         &siteId,
+		})
+	}
+
+	return resp, http.StatusOK, nil
+}
+
+func (a *Adaptor) GetResources(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourceInfo, int, error) {
+	var resp []invserver.ResourceInfo
+
+	_, resources, _, err := a.GetCurrentResources(ctx)
+	if err != nil {
+		return resp, http.StatusServiceUnavailable, fmt.Errorf("unable to get current resources: %w", err)
+	}
+
+	notavailable := "n/a" // Some data isn't available from dtias
+	for name, server := range resources.Nodes {
+		resp = append(resp, invserver.ResourceInfo{
+			ResourcePoolId: server.ResourcePoolID,
+			Description:    notavailable,
+			Name:           name,
+		})
+	}
+	return resp, http.StatusOK, nil
 }

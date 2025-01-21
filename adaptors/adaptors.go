@@ -20,11 +20,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	adaptorinterface "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/adaptor-interface"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
+	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -68,15 +70,15 @@ func (c *HwMgrAdaptorController) SetupWithManager(mgr ctrl.Manager) error {
 	return nil
 }
 
-func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (*pluginv1alpha1.HardwareManager, error) {
+func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, hwMgrId string) (*pluginv1alpha1.HardwareManager, int, error) {
 	name := types.NamespacedName{
-		Name:      nodepool.Spec.HwMgrId,
+		Name:      hwMgrId,
 		Namespace: c.Namespace,
 	}
 
 	hwmgr := &pluginv1alpha1.HardwareManager{}
 	if err := c.Client.Get(ctx, name, hwmgr); err != nil {
-		return nil, fmt.Errorf("unable to find HardwareManager CR (%s): %w", nodepool.Spec.HwMgrId, err)
+		return nil, http.StatusNotFound, fmt.Errorf("unable to find HardwareManager CR (%s): %w", hwMgrId, err)
 	}
 
 	// Validate that the required config data is present
@@ -88,19 +90,19 @@ func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, nodepool *hwmgmtv
 		}
 	case pluginv1alpha1.SupportedAdaptors.Dell:
 		if hwmgr.Spec.DellData == nil {
-			return nil, fmt.Errorf("required config data missing from HardwareManager: name=%s", hwmgr.Name)
+			return nil, http.StatusServiceUnavailable, fmt.Errorf("required config data missing from HardwareManager: name=%s", hwmgr.Name)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported adaptorId (%s) HardwareManager: name=%s", hwmgr.Spec.AdaptorID, hwmgr.Name)
+		return nil, http.StatusServiceUnavailable, fmt.Errorf("unsupported adaptorId (%s) HardwareManager: name=%s", hwmgr.Spec.AdaptorID, hwmgr.Name)
 	}
 
-	return hwmgr, nil
+	return hwmgr, http.StatusOK, nil
 }
 
 // HandleNodePool calls the applicable adaptor handler to process the NodePool CR
 func (c *HwMgrAdaptorController) HandleNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
 	ctx = logging.AppendCtx(ctx, slog.String("hwmgr", nodepool.Spec.HwMgrId))
-	hwmgr, err := c.getHwMgr(ctx, nodepool)
+	hwmgr, _, err := c.getHwMgr(ctx, nodepool.Spec.HwMgrId)
 	if err != nil {
 		c.Logger.Error("failed to get adaptor instance", slog.String("error", err.Error()))
 
@@ -148,7 +150,7 @@ func (c *HwMgrAdaptorController) HandleNodePool(ctx context.Context, nodepool *h
 
 // HandleNodePool calls the applicable adaptor handler to process the NodePool CR deletion
 func (c *HwMgrAdaptorController) HandleNodePoolDeletion(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
-	hwmgr, err := c.getHwMgr(ctx, nodepool)
+	hwmgr, _, err := c.getHwMgr(ctx, nodepool.Spec.HwMgrId)
 	if err != nil {
 		return fmt.Errorf("failed to get HardwareManager CR (%s): %w", nodepool.Spec.HwMgrId, err)
 	}
@@ -167,4 +169,88 @@ func (c *HwMgrAdaptorController) HandleNodePoolDeletion(ctx context.Context, nod
 	}
 
 	return nil
+}
+
+// HandleNodePool calls the applicable adaptor handler to process the NodePool CR deletion
+func (c *HwMgrAdaptorController) GetResourcePools(ctx context.Context, request invserver.GetResourcePoolsRequestObject) (invserver.GetResourcePoolsResponseObject, error) {
+
+	hwmgr, statusCode, err := c.getHwMgr(ctx, request.HwMgrId)
+	if err != nil {
+		if statusCode == http.StatusNotFound {
+			return invserver.GetResourcePools404ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+				Status: statusCode,
+				Detail: fmt.Sprintf("Hardware Manager %s not found", request.HwMgrId),
+			}), fmt.Errorf("hardware manager %s not found: %w", request.HwMgrId, err)
+		} else {
+			return invserver.GetResourcePools503ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+				Status: statusCode,
+				Detail: fmt.Sprintf("Hardware Manager %s unavailable: %s", request.HwMgrId, err.Error()),
+			}), fmt.Errorf("unable to get hardware manager %s: %w", request.HwMgrId, err)
+		}
+	}
+
+	adaptorID := string(hwmgr.Spec.AdaptorID)
+
+	// Validate the specified adaptor ID
+	adaptor, exists := c.adaptors[adaptorID]
+	if !exists {
+		// We should never get here, as the adaptor ID is validated in getHwMgr
+		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
+		return invserver.GetResourcePools500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+			Status: statusCode,
+			Detail: fmt.Sprintf("Hardware Manager %s specifies invalid adaptorId: %s", request.HwMgrId, adaptorID),
+		}), fmt.Errorf("hardware manager %s species invalid adaptorId: %s", request.HwMgrId, adaptorID)
+	}
+
+	resp, statusCode, err := adaptor.GetResourcePools(ctx, hwmgr)
+	if err != nil {
+		return invserver.GetResourcePools500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+			Status: statusCode,
+			Detail: fmt.Sprintf("Resource Pool query failed for %s: %s", request.HwMgrId, err.Error()),
+		}), fmt.Errorf("unable to query pools from hardware manager %s: %w", request.HwMgrId, err)
+	}
+
+	return invserver.GetResourcePools200JSONResponse(resp), nil
+}
+
+// HandleNodePool calls the applicable adaptor handler to process the NodePool CR deletion
+func (c *HwMgrAdaptorController) GetResources(ctx context.Context, request invserver.GetResourcesRequestObject) (invserver.GetResourcesResponseObject, error) {
+
+	hwmgr, statusCode, err := c.getHwMgr(ctx, request.HwMgrId)
+	if err != nil {
+		if statusCode == http.StatusNotFound {
+			return invserver.GetResources404ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+				Status: statusCode,
+				Detail: fmt.Sprintf("Hardware Manager %s not found", request.HwMgrId),
+			}), fmt.Errorf("hardware manager %s not found: %w", request.HwMgrId, err)
+		} else {
+			return invserver.GetResources503ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+				Status: statusCode,
+				Detail: fmt.Sprintf("Hardware Manager %s unavailable: %s", request.HwMgrId, err.Error()),
+			}), fmt.Errorf("unable to get hardware manager %s: %w", request.HwMgrId, err)
+		}
+	}
+
+	adaptorID := string(hwmgr.Spec.AdaptorID)
+
+	// Validate the specified adaptor ID
+	adaptor, exists := c.adaptors[adaptorID]
+	if !exists {
+		// We should never get here, as the adaptor ID is validated in getHwMgr
+		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
+		return invserver.GetResources500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+			Status: statusCode,
+			Detail: fmt.Sprintf("Hardware Manager %s specifies invalid adaptorId: %s", request.HwMgrId, adaptorID),
+		}), fmt.Errorf("hardware manager %s species invalid adaptorId: %s", request.HwMgrId, adaptorID)
+	}
+
+	resp, statusCode, err := adaptor.GetResources(ctx, hwmgr)
+	if err != nil {
+		return invserver.GetResources500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
+			Status: statusCode,
+			Detail: fmt.Sprintf("Resource query failed for %s: %s", request.HwMgrId, err.Error()),
+		}), fmt.Errorf("unable to query resources from hardware manager %s: %w", request.HwMgrId, err)
+	}
+
+	return invserver.GetResources200JSONResponse(resp), nil
 }

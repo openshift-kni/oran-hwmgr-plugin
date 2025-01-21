@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 )
 
 type InventoryServer struct {
+	HwMgrAdaptor *adaptors.HwMgrAdaptorController
 }
 
 // InventoryServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -45,8 +47,7 @@ func (i *InventoryServer) GetMinorVersions(_ context.Context, _ generated.GetMin
 }
 
 func (i *InventoryServer) GetResourcePools(ctx context.Context, request generated.GetResourcePoolsRequestObject) (generated.GetResourcePoolsResponseObject, error) {
-	// TODO implement me
-	return generated.GetResourcePools200JSONResponse([]generated.ResourcePoolInfo{}), nil
+	return i.HwMgrAdaptor.GetResourcePools(ctx, request) // nolint: wrapcheck
 }
 
 func (i *InventoryServer) GetResourcePool(ctx context.Context, request generated.GetResourcePoolRequestObject) (generated.GetResourcePoolResponseObject, error) {
@@ -60,8 +61,7 @@ func (i *InventoryServer) GetResourcePoolResources(ctx context.Context, request 
 }
 
 func (i *InventoryServer) GetResources(ctx context.Context, request generated.GetResourcesRequestObject) (generated.GetResourcesResponseObject, error) {
-	// TODO implement me
-	return generated.GetResources200JSONResponse([]generated.ResourceInfo{}), nil
+	return i.HwMgrAdaptor.GetResources(ctx, request) // nolint: wrapcheck
 }
 
 func (i *InventoryServer) GetResource(ctx context.Context, request generated.GetResourceRequestObject) (generated.GetResourceResponseObject, error) {

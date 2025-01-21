@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 )
@@ -23,7 +24,7 @@ const (
 )
 
 // RunServer starts the API server and blocks until it terminates or context is canceled.
-func RunServer(ctx context.Context, address string) error {
+func RunServer(ctx context.Context, address string, hwMgrAdaptor *adaptors.HwMgrAdaptorController) error {
 	slog.Info("Starting inventory API server")
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
@@ -40,7 +41,9 @@ func RunServer(ctx context.Context, address string) error {
 
 	// Init server
 	// Create the handler
-	server := api.InventoryServer{}
+	server := api.InventoryServer{
+		HwMgrAdaptor: hwMgrAdaptor,
+	}
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
 		generated.StrictHTTPServerOptions{

@@ -18,7 +18,7 @@ tags:
     description: Inventory Resources
 
 paths:
-  /o2ims-infrastructureMonitoring/api_versions:
+  /hardware-manager/inventory/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
@@ -111,8 +111,20 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified hardware manager was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: The specified hardware manager was unavailable.
           content:
             application/problem+json:
               schema:
@@ -232,8 +244,20 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified hardware manager was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: The specified hardware manager was unavailable.
           content:
             application/problem+json:
               schema:
@@ -302,7 +326,7 @@ components:
       properties:
         uriPrefix:
           type: string
-          example: "/o2ims-infrastructureInventory/v1"
+          example: "/hardware-manager/inventory/v1"
         apiVersions:
           type: array
           items:
@@ -338,7 +362,7 @@ components:
           type: string
           format: uri
           description: |
-            A URI reference that identifies the specific occurrence of the problem. 
+            A URI reference that identifies the specific occurrence of the problem.
             It may yield further information if dereferenced.
         additionalAttributes:
           type: object
