@@ -210,14 +210,14 @@ func (a *Adaptor) GetResources(ctx context.Context, hwmgr *pluginv1alpha1.Hardwa
 			}
 			server = &iter
 		}
-		resp = append(resp, invserver.ResourceInfo{
-			Name:           *resource.Name,
-			ResourceId:     *resource.Res.Id,
-			GlobalAssetId:  resource.GlobalAssetId,
-			ResourcePoolId: *resource.ResourcePoolId,
-			Description:    *resource.Description,
-		})
-		a.Logger.InfoContext(ctx, "Placeholder comment for server data reference", slog.Any("server", server))
+
+		if server == nil {
+			a.Logger.InfoContext(ctx, "Unable to find server info for resource. Skipping",
+				slog.String("resource-name", *resource.Name))
+			continue
+		}
+
+		resp = append(resp, getResourceInfo(resource, server))
 	}
 
 	return resp, http.StatusOK, nil
