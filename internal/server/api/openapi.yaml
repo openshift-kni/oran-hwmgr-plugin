@@ -469,18 +469,14 @@ components:
             Vendor or manufacturer name
           example: "Dell Inc."
         labels:
-          type: array
+          type: object
+          additionalProperties:
+            type: string
           description:
             Optional labels applied to this resource
-          items:
-            type: object
-            additionalProperties:
-              type: string
-            example: |
-              {"label-a": "value"}
           example: |
-            [{"label-a": "value-a",
-              "label-b": "value-b"}]
+            {"label-a": "value-a",
+             "label-b": "value-b"}
         tags:
           type: array
           description: Keywords describing or classifying the resource instance

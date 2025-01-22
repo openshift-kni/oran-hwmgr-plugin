@@ -58,7 +58,7 @@ func getResourceInfoGroups(resource hwmgrapi.ApiprotoResource) *[]string {
 	return resource.Groups.Group
 }
 
-func getResourceInfoLabels(resource hwmgrapi.ApiprotoResource) *[]map[string]string {
+func getResourceInfoLabels(resource hwmgrapi.ApiprotoResource) *map[string]string { // nolint: gocritic
 	if resource.Labels != nil {
 		labels := make(map[string]string)
 		for _, label := range *resource.Labels {
@@ -67,7 +67,7 @@ func getResourceInfoLabels(resource hwmgrapi.ApiprotoResource) *[]map[string]str
 			}
 			labels[*label.Key] = *label.Value
 		}
-		return &[]map[string]string{labels}
+		return &labels
 	}
 
 	return nil
