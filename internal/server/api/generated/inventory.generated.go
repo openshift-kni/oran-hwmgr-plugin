@@ -37,6 +37,12 @@ const (
 	ResourceInfoOperationalStateUNKNOWN  ResourceInfoOperationalState = "UNKNOWN"
 )
 
+// Defines values for ResourceInfoPowerState.
+const (
+	OFF ResourceInfoPowerState = "OFF"
+	ON  ResourceInfoPowerState = "ON"
+)
+
 // Defines values for ResourceInfoUsageState.
 const (
 	ACTIVE  ResourceInfoUsageState = "ACTIVE"
@@ -81,6 +87,21 @@ type ProblemDetails struct {
 	Type *string `json:"type,omitempty"`
 }
 
+// ProcessorInfo Information about a processor
+type ProcessorInfo struct {
+	// Architecture The processor architecture
+	Architecture *string `json:"architecture,omitempty"`
+
+	// Cores The total number of physical cores
+	Cores *int `json:"cores,omitempty"`
+
+	// Manufacturer The manufacturer of the processor
+	Manufacturer *string `json:"manufacturer,omitempty"`
+
+	// Model The manufacturer's processor model name
+	Model *string `json:"model,omitempty"`
+}
+
 // ResourceInfo Information about a resource.
 type ResourceInfo struct {
 	// AdminState The administrative state of the resource
@@ -92,16 +113,41 @@ type ResourceInfo struct {
 	// GlobalAssetId Identifier or serial number of the resource, if available.
 	GlobalAssetId *string `json:"globalAssetId,omitempty"`
 
+	// Groups Keywords denoting groups a resource belongs to.
+	Groups *[]string `json:"groups,omitempty"`
+
+	// Labels Optional labels applied to this reesource
+	Labels *[]map[string]string `json:"labels,omitempty"`
+
+	// Memory The total physical memory in MiB
+	Memory *int `json:"memory,omitempty"`
+
+	// Model The vendor model name of the resource
+	Model *string `json:"model,omitempty"`
+
 	// Name Short name for the resource.
 	Name string `json:"name"`
 
 	// OperationalState The operational state of the resource
 	OperationalState ResourceInfoOperationalState `json:"operationalState"`
 
+	// PartNumber The vendor part number of the resource
+	PartNumber *string `json:"partNumber,omitempty"`
+
+	// PowerState The power state of the resource
+	PowerState *ResourceInfoPowerState `json:"powerState,omitempty"`
+	Processors *[]ProcessorInfo        `json:"processors,omitempty"`
+
 	// ResourceId Identifier for the Resource.
-	ResourceId     string                 `json:"resourceId"`
-	ResourcePoolId string                 `json:"resourcePoolId"`
-	UsageState     ResourceInfoUsageState `json:"usageState"`
+	ResourceId     string `json:"resourceId"`
+	ResourcePoolId string `json:"resourcePoolId"`
+
+	// Tags Keywords describing or classifying the resource instance
+	Tags       *[]string              `json:"tags,omitempty"`
+	UsageState ResourceInfoUsageState `json:"usageState"`
+
+	// Vendor Vendor or manufacturer name
+	Vendor *string `json:"vendor,omitempty"`
 }
 
 // ResourceInfoAdminState The administrative state of the resource
@@ -109,6 +155,9 @@ type ResourceInfoAdminState string
 
 // ResourceInfoOperationalState The operational state of the resource
 type ResourceInfoOperationalState string
+
+// ResourceInfoPowerState The power state of the resource
+type ResourceInfoPowerState string
 
 // ResourceInfoUsageState defines model for ResourceInfo.UsageState.
 type ResourceInfoUsageState string
@@ -1020,37 +1069,44 @@ func (sh *strictHandler) GetResource(w http.ResponseWriter, r *http.Request, hwM
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"AAD//524XnpwLwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -399,6 +399,32 @@ components:
         - name
         - description
 
+    ProcessorInfo:
+      description:
+        Information about a processor
+      type: object
+      properties:
+        manufacturer:
+          type: string
+          description:
+            The manufacturer of the processor
+          example: "Intel"
+        model:
+          type: string
+          description:
+            The manufacturer's processor model name
+          example: "Intel(R) Xeon(R) Gold 6433N"
+        architecture:
+          type: string
+          description:
+            The processor architecture
+          example: "x86-64"
+        cores:
+          type: integer
+          description:
+            The total number of physical cores
+          example: 32
+
     ResourceInfo:
       description:
         Information about a resource.
@@ -424,13 +450,63 @@ components:
           description:
             Identifier or serial number of the resource, if available.
           example: "xr860txcnfdg22"
+        partNumber:
+          type: string
+          description:
+            The vendor part number of the resource
+        model:
+          type: string
+          description:
+            The vendor model name of the resource
+          example: "PowerEdge XR860t"
+        vendor:
+          type: string
+          description:
+            Vendor or manufacturer name
+          example: "Dell Inc."
+        labels:
+          type: array
+          description:
+            Optional labels applied to this reesource
+          items:
+            type: object
+            additionalProperties:
+              type: string
+            example: |
+              {"label-a": "value"}
+          example: |
+            [{"label-a": "value-a",
+              "label-b": "value-b"}]
+        tags:
+          type: array
+          description: Keywords describing or classifying the resource instance
+          items:
+            type: string
+        groups:
+          type: array
+          description: Keywords denoting groups a resource belongs to.
+          items:
+            type: string
+        memory:
+          type: integer
+          description: The total physical memory in MiB
+        processors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcessorInfo"
+        powerState:
+          type: string
+          enum:
+          - ON
+          - OFF
+          description: The power state of the resource
         adminState:
           type: string
           enum:
-            - UNLOCKED
-            - SHUTTING_DOWN
-            - LOCKED
-            - UNKNOWN
+          - UNLOCKED
+          - SHUTTING_DOWN
+          - LOCKED
+          - UNKNOWN
           description: The administrative state of the resource
         operationalState:
           type: string
