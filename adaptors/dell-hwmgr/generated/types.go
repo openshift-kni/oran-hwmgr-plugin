@@ -11,54 +11,222 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for CloudCloudType.
+const (
+	CLOUDTYPEDEF CloudCloudType = "CLOUDTYPE_DEF"
+	KUBERNETES   CloudCloudType = "KUBERNETES"
+	RHOCP        CloudCloudType = "RHOCP"
+)
+
+// Defines values for ComputeKind.
+const (
+	KINDDEF  ComputeKind = "KIND_DEF"
+	LOGICAL  ComputeKind = "LOGICAL"
+	PHYSICAL ComputeKind = "PHYSICAL"
+)
+
+// Defines values for ComputeRealTime.
+const (
+	ComputeRealTimeFALSE ComputeRealTime = "FALSE"
+	ComputeRealTimeRTDEF ComputeRealTime = "RT_DEF"
+	ComputeRealTimeTRUE  ComputeRealTime = "TRUE"
+)
+
+// Defines values for FilterOperator.
+const (
+	AnyOf       FilterOperator = "any_of"
+	Contains    FilterOperator = "contains"
+	EndsWith    FilterOperator = "ends_with"
+	IsNotEmpty  FilterOperator = "is_not_empty"
+	IsNotNull   FilterOperator = "is_not_null"
+	IsNull      FilterOperator = "is_null"
+	None        FilterOperator = "none"
+	NotAnyOf    FilterOperator = "not_any_of"
+	NotContains FilterOperator = "not_contains"
+	StartsWith  FilterOperator = "starts_with"
+)
+
+// Defines values for ResourceAdminState.
+const (
+	LOCKED            ResourceAdminState = "LOCKED"
+	SHUTTINGDOWN      ResourceAdminState = "SHUTTING_DOWN"
+	UNKNOWNADMINSTATE ResourceAdminState = "UNKNOWN_ADMINSTATE"
+	UNLOCKED          ResourceAdminState = "UNLOCKED"
+)
+
+// Defines values for ResourceAdminStatus.
+const (
+	ALARMOUTSTANDING   ResourceAdminStatus = "ALARM_OUTSTANDING"
+	CLEAR              ResourceAdminStatus = "CLEAR"
+	CRITICAL           ResourceAdminStatus = "CRITICAL"
+	MAJOR              ResourceAdminStatus = "MAJOR"
+	MINOR              ResourceAdminStatus = "MINOR"
+	UNDERREPAIR        ResourceAdminStatus = "UNDER_REPAIR"
+	UNKNOWNADMINSTATUS ResourceAdminStatus = "UNKNOWN_ADMINSTATUS"
+)
+
+// Defines values for ResourceAvStatus.
+const (
+	ResourceAvStatusDEGRADED        ResourceAvStatus = "DEGRADED"
+	ResourceAvStatusDEPENDANCY      ResourceAvStatus = "DEPENDANCY"
+	ResourceAvStatusFAILED          ResourceAvStatus = "FAILED"
+	ResourceAvStatusINTEST          ResourceAvStatus = "IN_TEST"
+	ResourceAvStatusLOGFULL         ResourceAvStatus = "LOG_FULL"
+	ResourceAvStatusNOTINSTALLED    ResourceAvStatus = "NOT_INSTALLED"
+	ResourceAvStatusOFFDUTY         ResourceAvStatus = "OFF_DUTY"
+	ResourceAvStatusOFFLINE         ResourceAvStatus = "OFFLINE"
+	ResourceAvStatusPOWEROFF        ResourceAvStatus = "POWER_OFF"
+	ResourceAvStatusUNKNOWNAVSTATUS ResourceAvStatus = "UNKNOWN_AVSTATUS"
+)
+
+// Defines values for ResourceCStatus.
+const (
+	OPEN                ResourceCStatus = "OPEN"
+	PARTOFSERVICELOCKED ResourceCStatus = "PART_OF_SERVICE_LOCKED"
+	RESERVEDFORTEST     ResourceCStatus = "RESERVED_FOR_TEST"
+	SUBJECTTOTEST       ResourceCStatus = "SUBJECT_TO_TEST"
+	SUSPENDED           ResourceCStatus = "SUSPENDED"
+	UNKNOWNCSTATUS      ResourceCStatus = "UNKNOWN_CSTATUS"
+)
+
+// Defines values for ResourceOpState.
+const (
+	DISABLED       ResourceOpState = "DISABLED"
+	ENABLED        ResourceOpState = "ENABLED"
+	UNKNOWNOPSTATE ResourceOpState = "UNKNOWN_OPSTATE"
+)
+
+// Defines values for ResourcePStatus.
+const (
+	INITIALIZATIONREQUIRED ResourcePStatus = "INITIALIZATION_REQUIRED"
+	INITIALIZING           ResourcePStatus = "INITIALIZING"
+	NOTINITIALIZED         ResourcePStatus = "NOT_INITIALIZED"
+	REPORTING              ResourcePStatus = "REPORTING"
+	TERMINATING            ResourcePStatus = "TERMINATING"
+	UNKNOWNPSTATUS         ResourcePStatus = "UNKNOWN_PSTATUS"
+)
+
+// Defines values for ResourcePublic.
+const (
+	ResourcePublicFALSE      ResourcePublic = "FALSE"
+	ResourcePublicTRUE       ResourcePublic = "TRUE"
+	ResourcePublicUNKNOWNPUB ResourcePublic = "UNKNOWN_PUB"
+)
+
+// Defines values for ResourceSStatus.
+const (
+	ResourceSStatusCOLDSTANDBY      ResourceSStatus = "COLD_STANDBY"
+	ResourceSStatusHOTSTANDBY       ResourceSStatus = "HOT_STANDBY"
+	ResourceSStatusNONE             ResourceSStatus = "NONE"
+	ResourceSStatusPROVIDINGSERVICE ResourceSStatus = "PROVIDING_SERVICE"
+	ResourceSStatusUNKNOWNSSTATUS   ResourceSStatus = "UNKNOWN_SSTATUS"
+)
+
+// Defines values for ResourceUStatus.
+const (
+	ResourceUStatusKNOWN          ResourceUStatus = "KNOWN"
+	ResourceUStatusUNKNOWN        ResourceUStatus = "UNKNOWN"
+	ResourceUStatusUNKNOWNUSTATUS ResourceUStatus = "UNKNOWN_USTATUS"
+)
+
+// Defines values for ResourceUsageState.
+const (
+	ResourceUsageStateACTIVE            ResourceUsageState = "ACTIVE"
+	ResourceUsageStateBUSY              ResourceUsageState = "BUSY"
+	ResourceUsageStateIDLE              ResourceUsageState = "IDLE"
+	ResourceUsageStateUNKNOWNUSAGESTATE ResourceUsageState = "UNKNOWN_USAGESTATE"
+)
+
+// Defines values for ApiprotoComputeRole.
+const (
+	ApiprotoComputeRolePRIMARY ApiprotoComputeRole = "PRIMARY"
+	ApiprotoComputeRoleREPLICA ApiprotoComputeRole = "REPLICA"
+	ApiprotoComputeRoleROLEDEF ApiprotoComputeRole = "ROLE_DEF"
+	ApiprotoComputeRoleUNKNOWN ApiprotoComputeRole = "UNKNOWN"
+	ApiprotoComputeRoleWORKER  ApiprotoComputeRole = "WORKER"
+)
+
+// Defines values for ApiprotoComputeSelectorRole.
+const (
+	CONTROLLER ApiprotoComputeSelectorRole = "CONTROLLER"
+	DUPLEX     ApiprotoComputeSelectorRole = "DUPLEX"
+	ROLEDEF    ApiprotoComputeSelectorRole = "ROLE_DEF"
+	WORKER     ApiprotoComputeSelectorRole = "WORKER"
+)
+
+// Defines values for ApiprotoResourceResourceType.
+const (
+	BMC            ApiprotoResourceResourceType = "BMC"
+	CLOUD          ApiprotoResourceResourceType = "CLOUD"
+	COMPUTE        ApiprotoResourceResourceType = "COMPUTE"
+	NETWORKDEVICE  ApiprotoResourceResourceType = "NETWORKDEVICE"
+	UNKNOWNRESTYPE ApiprotoResourceResourceType = "UNKNOWN_RESTYPE"
+)
+
+// Defines values for ApiprotoResponseStatus.
+const (
+	ApiprotoResponseStatusBUSY      ApiprotoResponseStatus = "BUSY"
+	ApiprotoResponseStatusCANCELLED ApiprotoResponseStatus = "CANCELLED"
+	ApiprotoResponseStatusCOMPLETE  ApiprotoResponseStatus = "COMPLETE"
+	ApiprotoResponseStatusFAILED    ApiprotoResponseStatus = "FAILED"
+)
+
+// Defines values for ApiprotoStatus.
+const (
+	ApiprotoStatusBUSY      ApiprotoStatus = "BUSY"
+	ApiprotoStatusCANCELLED ApiprotoStatus = "CANCELLED"
+	ApiprotoStatusCOMPLETE  ApiprotoStatus = "COMPLETE"
+	ApiprotoStatusFAILED    ApiprotoStatus = "FAILED"
+)
+
 // Defines values for GetServersInventoryParamsAllocated.
 const (
-	FALSE GetServersInventoryParamsAllocated = "FALSE"
-	NONE  GetServersInventoryParamsAllocated = "NONE"
-	TRUE  GetServersInventoryParamsAllocated = "TRUE"
+	GetServersInventoryParamsAllocatedFALSE GetServersInventoryParamsAllocated = "FALSE"
+	GetServersInventoryParamsAllocatedNONE  GetServersInventoryParamsAllocated = "NONE"
+	GetServersInventoryParamsAllocatedTRUE  GetServersInventoryParamsAllocated = "TRUE"
 )
 
 // CloudCloudType defines model for CloudCloudType.
-type CloudCloudType = interface{}
+type CloudCloudType string
 
 // ComputeKind defines model for ComputeKind.
-type ComputeKind = interface{}
+type ComputeKind string
 
 // ComputeRealTime defines model for ComputeRealTime.
-type ComputeRealTime = interface{}
+type ComputeRealTime string
 
 // FilterOperator defines model for FilterOperator.
-type FilterOperator = interface{}
+type FilterOperator string
 
 // ResourceAdminState defines model for ResourceAdminState.
-type ResourceAdminState = interface{}
+type ResourceAdminState string
 
 // ResourceAdminStatus defines model for ResourceAdminStatus.
-type ResourceAdminStatus = interface{}
+type ResourceAdminStatus string
 
 // ResourceAvStatus defines model for ResourceAvStatus.
-type ResourceAvStatus = interface{}
+type ResourceAvStatus string
 
 // ResourceCStatus defines model for ResourceCStatus.
-type ResourceCStatus = interface{}
+type ResourceCStatus string
 
 // ResourceOpState defines model for ResourceOpState.
-type ResourceOpState = interface{}
+type ResourceOpState string
 
 // ResourcePStatus defines model for ResourcePStatus.
-type ResourcePStatus = interface{}
+type ResourcePStatus string
 
 // ResourcePublic defines model for ResourcePublic.
-type ResourcePublic = interface{}
+type ResourcePublic string
 
 // ResourceSStatus defines model for ResourceSStatus.
-type ResourceSStatus = interface{}
+type ResourceSStatus string
 
 // ResourceUStatus defines model for ResourceUStatus.
-type ResourceUStatus = interface{}
+type ResourceUStatus string
 
 // ResourceUsageState defines model for ResourceUsageState.
-type ResourceUsageState = interface{}
+type ResourceUsageState string
 
 // ApiprotoAPIError defines model for apiprotoAPIError.
 type ApiprotoAPIError struct {
@@ -773,7 +941,7 @@ type ApiprotoCompute struct {
 }
 
 // ApiprotoComputeRole defines model for apiprotoComputeRole.
-type ApiprotoComputeRole = interface{}
+type ApiprotoComputeRole string
 
 // ApiprotoComputeSelector defines model for apiprotoComputeSelector.
 type ApiprotoComputeSelector struct {
@@ -786,7 +954,7 @@ type ApiprotoComputeSelector struct {
 }
 
 // ApiprotoComputeSelectorRole defines model for apiprotoComputeSelectorRole.
-type ApiprotoComputeSelectorRole = interface{}
+type ApiprotoComputeSelectorRole string
 
 // ApiprotoContactInfo defines model for apiprotoContactInfo.
 type ApiprotoContactInfo struct {
@@ -1891,7 +2059,7 @@ type ApiprotoResourcePoolsResp struct {
 }
 
 // ApiprotoResourceResourceType defines model for apiprotoResourceResourceType.
-type ApiprotoResourceResourceType = interface{}
+type ApiprotoResourceResourceType string
 
 // ApiprotoResourceSubscriptionResp defines model for apiprotoResourceSubscriptionResp.
 type ApiprotoResourceSubscriptionResp struct {
@@ -1924,7 +2092,7 @@ type ApiprotoResponse struct {
 }
 
 // ApiprotoResponseStatus defines model for apiprotoResponseStatus.
-type ApiprotoResponseStatus = interface{}
+type ApiprotoResponseStatus string
 
 // ApiprotoSDCardSpec defines model for apiprotoSDCardSpec.
 type ApiprotoSDCardSpec struct {
@@ -2137,7 +2305,7 @@ type ApiprotoSoftwareVolumeMapping struct {
 }
 
 // ApiprotoStatus defines model for apiprotoStatus.
-type ApiprotoStatus = interface{}
+type ApiprotoStatus string
 
 // ApiprotoStatusSpec defines model for apiprotoStatusSpec.
 type ApiprotoStatusSpec struct {
