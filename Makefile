@@ -143,6 +143,7 @@ generate: deps-update go-generate controller-gen ## Generate code containing Dee
 .PHONY: go-generate
 go-generate:
 	go generate ./...
+	cd pkg/inventory-client && go generate ./...
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.

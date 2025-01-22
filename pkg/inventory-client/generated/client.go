@@ -199,6 +199,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetAllVersions request
+	GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMinorVersions request
 	GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -216,9 +219,18 @@ type ClientInterface interface {
 
 	// GetResource request
 	GetResource(ctx context.Context, hwMgrId string, resourceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
 
-	// GetAllVersions request
-	GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAllVersionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -293,16 +305,31 @@ func (c *Client) GetResource(ctx context.Context, hwMgrId string, resourceId str
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAllVersionsRequest(c.Server)
+// NewGetAllVersionsRequest generates requests for GetAllVersions
+func NewGetAllVersionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+
+	operationPath := fmt.Sprintf("/hardware-manager/inventory/api_versions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
 		return nil, err
 	}
-	return c.Client.Do(req)
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewGetMinorVersionsRequest generates requests for GetMinorVersions
@@ -523,33 +550,6 @@ func NewGetResourceRequest(server string, hwMgrId string, resourceId string) (*h
 	return req, nil
 }
 
-// NewGetAllVersionsRequest generates requests for GetAllVersions
-func NewGetAllVersionsRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/o2ims-infrastructureMonitoring/api_versions")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -593,6 +593,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetAllVersionsWithResponse request
+	GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error)
+
 	// GetMinorVersionsWithResponse request
 	GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error)
 
@@ -610,9 +613,30 @@ type ClientWithResponsesInterface interface {
 
 	// GetResourceWithResponse request
 	GetResourceWithResponse(ctx context.Context, hwMgrId string, resourceId string, reqEditors ...RequestEditorFn) (*GetResourceResponse, error)
+}
 
-	// GetAllVersionsWithResponse request
-	GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error)
+type GetAllVersionsResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *APIVersions
+	ApplicationProblemJSON400 *ProblemDetails
+	ApplicationProblemJSON500 *ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAllVersionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAllVersionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type GetMinorVersionsResponse struct {
@@ -645,7 +669,9 @@ type GetResourcePoolsResponse struct {
 	JSON200                   *[]ResourcePoolInfo
 	ApplicationProblemJSON400 *ProblemDetails
 	ApplicationProblemJSON403 *ProblemDetails
+	ApplicationProblemJSON404 *ProblemDetails
 	ApplicationProblemJSON500 *ProblemDetails
+	ApplicationProblemJSON503 *ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
@@ -718,7 +744,9 @@ type GetResourcesResponse struct {
 	HTTPResponse              *http.Response
 	JSON200                   *[]ResourceInfo
 	ApplicationProblemJSON400 *ProblemDetails
+	ApplicationProblemJSON404 *ProblemDetails
 	ApplicationProblemJSON500 *ProblemDetails
+	ApplicationProblemJSON503 *ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
@@ -762,28 +790,13 @@ func (r GetResourceResponse) StatusCode() int {
 	return 0
 }
 
-type GetAllVersionsResponse struct {
-	Body                      []byte
-	HTTPResponse              *http.Response
-	JSON200                   *APIVersions
-	ApplicationProblemJSON400 *ProblemDetails
-	ApplicationProblemJSON500 *ProblemDetails
-}
-
-// Status returns HTTPResponse.Status
-func (r GetAllVersionsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
+// GetAllVersionsWithResponse request returning *GetAllVersionsResponse
+func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error) {
+	rsp, err := c.GetAllVersions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
 	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetAllVersionsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
+	return ParseGetAllVersionsResponse(rsp)
 }
 
 // GetMinorVersionsWithResponse request returning *GetMinorVersionsResponse
@@ -840,13 +853,44 @@ func (c *ClientWithResponses) GetResourceWithResponse(ctx context.Context, hwMgr
 	return ParseGetResourceResponse(rsp)
 }
 
-// GetAllVersionsWithResponse request returning *GetAllVersionsResponse
-func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error) {
-	rsp, err := c.GetAllVersions(ctx, reqEditors...)
+// ParseGetAllVersionsResponse parses an HTTP response from a GetAllVersionsWithResponse call
+func ParseGetAllVersionsResponse(rsp *http.Response) (*GetAllVersionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetAllVersionsResponse(rsp)
+
+	response := &GetAllVersionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest APIVersions
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseGetMinorVersionsResponse parses an HTTP response from a GetMinorVersionsWithResponse call
@@ -924,12 +968,26 @@ func ParseGetResourcePoolsResponse(rsp *http.Response) (*GetResourcePoolsRespons
 		}
 		response.ApplicationProblemJSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ProblemDetails
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
 
 	}
 
@@ -1051,12 +1109,26 @@ func ParseGetResourcesResponse(rsp *http.Response) (*GetResourcesResponse, error
 		}
 		response.ApplicationProblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ProblemDetails
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
 
 	}
 
@@ -1110,80 +1182,40 @@ func ParseGetResourceResponse(rsp *http.Response) (*GetResourceResponse, error) 
 	return response, nil
 }
 
-// ParseGetAllVersionsResponse parses an HTTP response from a GetAllVersionsWithResponse call
-func ParseGetAllVersionsResponse(rsp *http.Response) (*GetAllVersionsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetAllVersionsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest APIVersions
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
