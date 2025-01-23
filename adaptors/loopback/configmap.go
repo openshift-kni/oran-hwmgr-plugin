@@ -44,9 +44,14 @@ type cmResources struct {
 	Nodes         map[string]cmNodeInfo `json:"nodes" yaml:"nodes"`
 }
 
+type cmAllocatedNode struct {
+	NodeName string `json:"nodeName" yaml:"nodeName"`
+	NodeId   string `json:"nodeId" yaml:"nodeId"`
+}
+
 type cmAllocatedCloud struct {
-	CloudID    string              `json:"cloudID" yaml:"cloudID"`
-	Nodegroups map[string][]string `json:"nodegroups" yaml:"nodegroups"`
+	CloudID    string                       `json:"cloudID" yaml:"cloudID"`
+	Nodegroups map[string][]cmAllocatedNode `json:"nodegroups" yaml:"nodegroups"`
 }
 
 type cmAllocations struct {
@@ -64,18 +69,18 @@ func getFreeNodesInPool(resources cmResources, allocations cmAllocations, poolID
 	inuse := make(map[string]bool)
 	for _, cloud := range allocations.Clouds {
 		for groupname := range cloud.Nodegroups {
-			for _, nodename := range cloud.Nodegroups[groupname] {
-				inuse[nodename] = true
+			for _, node := range cloud.Nodegroups[groupname] {
+				inuse[node.NodeId] = true
 			}
 		}
 	}
 
-	for nodename, node := range resources.Nodes {
+	for nodeId, node := range resources.Nodes {
 		// Check if the node belongs to the specified resource pool
 		if node.ResourcePoolID == poolID {
 			// Only add to the freenodes if not in use
-			if _, used := inuse[nodename]; !used {
-				freenodes = append(freenodes, nodename)
+			if _, used := inuse[nodeId]; !used {
+				freenodes = append(freenodes, nodeId)
 			}
 		}
 	}
@@ -132,7 +137,9 @@ func (a *Adaptor) GetAllocatedNodes(ctx context.Context, nodepool *hwmgmtv1alpha
 
 	// Get allocated resources
 	for _, nodegroup := range nodepool.Spec.NodeGroup {
-		allocatedNodes = append(allocatedNodes, cloud.Nodegroups[nodegroup.NodePoolData.Name]...)
+		for _, node := range cloud.Nodegroups[nodegroup.NodePoolData.Name] {
+			allocatedNodes = append(allocatedNodes, node.NodeName)
+		}
 	}
 
 	slices.Sort(allocatedNodes)

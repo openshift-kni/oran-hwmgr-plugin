@@ -8,14 +8,16 @@ spec:
   hwMgrId: loopback-1
   location: ottawa
   nodeGroup:
-  - hwProfile: profile-spr-single-processor-64G
-    name: controller
+  - nodePoolData:
+      hwProfile: profile-spr-single-processor-64G
+      name: controller
+      resourcePoolId: master
+      role: master
     size: 1
-    resourcePoolId: xyz-master
-    role: master
-  - hwProfile: profile-spr-dual-processor-128G
-    name: worker
+  - nodePoolData:
+      hwProfile: profile-spr-dual-processor-128G
+      name: worker
+      resourcePoolId: worker
+      role: worker
     size: 0
-    resourcePoolId: xyz-worker
-    role: worker
   site: building-1

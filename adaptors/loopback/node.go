@@ -53,7 +53,7 @@ func (a *Adaptor) AllocateNode(ctx context.Context, nodepool *hwmgmtv1alpha1.Nod
 	}
 	if cloud == nil {
 		// The cloud wasn't found in the list, so create a new entry
-		allocations.Clouds = append(allocations.Clouds, cmAllocatedCloud{CloudID: cloudID, Nodegroups: make(map[string][]string)})
+		allocations.Clouds = append(allocations.Clouds, cmAllocatedCloud{CloudID: cloudID, Nodegroups: make(map[string][]cmAllocatedNode)})
 		cloud = &allocations.Clouds[len(allocations.Clouds)-1]
 	}
 
@@ -79,14 +79,14 @@ func (a *Adaptor) AllocateNode(ctx context.Context, nodepool *hwmgmtv1alpha1.Nod
 
 		nodeinfo, exists := resources.Nodes[nodeId]
 		if !exists {
-			return fmt.Errorf("unable to find nodeinfo for %s", nodename)
+			return fmt.Errorf("unable to find nodeinfo for %s", nodeId)
 		}
 
 		if err := a.CreateBMCSecret(ctx, nodepool, nodename, nodeinfo.BMC.UsernameBase64, nodeinfo.BMC.PasswordBase64); err != nil {
 			return fmt.Errorf("failed to create bmc-secret when allocating node %s, nodeId %s: %w", nodename, nodeId, err)
 		}
 
-		cloud.Nodegroups[nodegroup.NodePoolData.Name] = append(cloud.Nodegroups[nodegroup.NodePoolData.Name], nodename)
+		cloud.Nodegroups[nodegroup.NodePoolData.Name] = append(cloud.Nodegroups[nodegroup.NodePoolData.Name], cmAllocatedNode{NodeName: nodename, NodeId: nodeId})
 
 		// Update the configmap
 		yamlString, err := yaml.Marshal(&allocations)
