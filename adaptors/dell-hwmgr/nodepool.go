@@ -18,6 +18,7 @@ package dellhwmgr
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -36,6 +37,16 @@ import (
 
 // ValidateNodePool performs basic validation of the nodepool data
 func (a *Adaptor) ValidateNodePool(nodepool *hwmgmtv1alpha1.NodePool) error {
+	for _, nodegroup := range nodepool.Spec.NodeGroup {
+		if nodegroup.NodePoolData.ResourceSelector != "" {
+			// Validate that the resourceSelector is parsable
+			selectors := make(map[string]string)
+			if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &selectors); err != nil {
+				return fmt.Errorf("unable to parse resourceSelector: %s", nodegroup.NodePoolData.ResourceSelector)
+			}
+		}
+	}
+
 	return nil
 }
 

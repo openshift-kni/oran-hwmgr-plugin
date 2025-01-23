@@ -187,7 +187,7 @@ func NewClientWithResponses(
 
 // GetResourceGroup queries the hardware manager to get the resource group data
 func (c *HardwareManagerClient) GetResourceGroup(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (*hwmgrapi.RhprotoResourceGroupObjectGetResponseBody, error) {
-	rg := c.ResourceGroupFromNodePool(nodepool)
+	rg := c.ResourceGroupFromNodePool(ctx, nodepool)
 	rgId := *rg.ResourceGroup.Id
 	tenant := c.GetTenant()
 
@@ -210,7 +210,7 @@ func ResourceGroupIdFromNodePool(nodepool *hwmgmtv1alpha1.NodePool) string {
 }
 
 // ResourceGroupFromNodePool transforms data from a nodepool object to a CreateResourceGroupJSONRequestBody instance
-func (c *HardwareManagerClient) ResourceGroupFromNodePool(nodepool *hwmgmtv1alpha1.NodePool) *hwmgrapi.CreateResourceGroupJSONRequestBody {
+func (c *HardwareManagerClient) ResourceGroupFromNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) *hwmgrapi.CreateResourceGroupJSONRequestBody {
 	rgId := ResourceGroupIdFromNodePool(nodepool)
 	tenant := c.GetTenant()
 	resourceTypeId := utils.GetResourceTypeId(nodepool)
@@ -220,18 +220,29 @@ func (c *HardwareManagerClient) ResourceGroupFromNodePool(nodepool *hwmgmtv1alph
 
 	resourceSelectors := make(map[string]hwmgrapi.RhprotoResourceSelectorRequest)
 	for _, nodegroup := range nodepool.Spec.NodeGroup {
+		inclusions := []hwmgrapi.RhprotoResourceSelectorFilterIncludeLabel{
+			{
+				Key:   &roleKey,
+				Value: &nodegroup.NodePoolData.Name, // TODO: This should be nodegroup.NodePoolData.Role, but has to be nodegroup.NodePoolData.Name for now
+			},
+		}
+		if nodegroup.NodePoolData.ResourceSelector != "" {
+			selectors := make(map[string]string)
+			if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &selectors); err != nil {
+				c.Logger.InfoContext(ctx, "Unable to parse resourceSelector", slog.String("resourceSelector", nodegroup.NodePoolData.ResourceSelector))
+			} else {
+				for key, value := range selectors {
+					inclusions = append(inclusions, hwmgrapi.RhprotoResourceSelectorFilterIncludeLabel{Key: &key, Value: &value})
+				}
+			}
+		}
 		resourceSelectors[nodegroup.NodePoolData.Name] = hwmgrapi.RhprotoResourceSelectorRequest{
 			RpId:              &nodegroup.NodePoolData.ResourcePoolId,
 			ResourceProfileId: &nodegroup.NodePoolData.HwProfile,
 			NumResources:      &nodegroup.Size,
 			Filters: &hwmgrapi.RhprotoResourceSelectorFilter{
 				Include: &hwmgrapi.RhprotoResourceSelectorFilterInclude{
-					Labels: &[]hwmgrapi.RhprotoResourceSelectorFilterIncludeLabel{
-						{
-							Key:   &roleKey,
-							Value: &nodegroup.NodePoolData.Name, // TODO: This should be nodegroup.NodePoolData.Role, but has to be nodegroup.NodePoolData.Name for now
-						},
-					},
+					Labels: &inclusions,
 				},
 				Exclude: &excludes,
 			},
@@ -255,7 +266,7 @@ func (c *HardwareManagerClient) ResourceGroupFromNodePool(nodepool *hwmgmtv1alph
 // CreateResourceGroup sends a request to the hardware manager, returns a jobId
 // TODO: Improve error handling for different status codes
 func (c *HardwareManagerClient) CreateResourceGroup(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (string, error) {
-	rg := c.ResourceGroupFromNodePool(nodepool)
+	rg := c.ResourceGroupFromNodePool(ctx, nodepool)
 	rgId := *rg.ResourceGroup.Id
 	tenant := c.GetTenant()
 
