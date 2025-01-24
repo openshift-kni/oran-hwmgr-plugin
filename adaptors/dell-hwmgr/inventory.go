@@ -17,8 +17,17 @@ limitations under the License.
 package dellhwmgr
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+
 	hwmgrapi "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/generated"
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/hwmgrclient"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/samber/lo"
 )
 
 func getResourceInfoAdminState(resource hwmgrapi.ApiprotoResource) invserver.ResourceInfoAdminState {
@@ -238,4 +247,183 @@ func getResourceInfo(resource hwmgrapi.ApiprotoResource, server *hwmgrapi.Apipro
 		UsageState:       getResourceInfoUsageState(resource),
 		Vendor:           getResourceInfoVendor(server),
 	}
+}
+
+func (a *Adaptor) FindAllocatedServers(ctx context.Context, hwmgrClient *hwmgrclient.HardwareManagerClient) ([]string, error) {
+	allocatedServers := []string{}
+
+	resourceGroups, err := hwmgrClient.GetResourceGroups(ctx)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "GetResourceGroups error", slog.String("error", err.Error()))
+		return allocatedServers, fmt.Errorf("unable to query resource groups: %w", err)
+	}
+
+	if resourceGroups.ResourceGroups == nil {
+		a.Logger.InfoContext(ctx, "ResourceGroups returned from query is nil")
+		return allocatedServers, nil
+	}
+
+	for _, iter := range *resourceGroups.ResourceGroups {
+		if iter.Id == nil {
+			continue
+		}
+
+		rg, err := hwmgrClient.GetResourceGroupFromId(ctx, *iter.Id)
+		if err != nil {
+			a.Logger.InfoContext(ctx, "Failed GetResourceGroup", slog.String("error", err.Error()))
+			return allocatedServers, fmt.Errorf("unable to query resource group %s: %w", *iter.Id, err)
+		}
+
+		if rg.ResourceSelectors == nil {
+			continue
+		}
+
+		for _, resourceSelector := range *rg.ResourceSelectors {
+			for _, node := range *resourceSelector.Resources {
+				if node.Id != nil {
+					allocatedServers = append(allocatedServers, *node.Id)
+				}
+			}
+		}
+	}
+
+	return allocatedServers, nil
+}
+
+// labelsMatch checks the set of labels for a given match
+func labelsMatch(labels *[]hwmgrapi.ApiprotoLabel, key, value string) bool {
+	if labels == nil {
+		return false
+	}
+
+	for _, label := range *labels {
+		if label.Key != nil && *label.Key == key && label.Value != nil && *label.Value == value {
+			return true
+		}
+	}
+
+	return false
+}
+
+func checkResourceSelectors(labels *[]hwmgrapi.ApiprotoLabel, resourceSelectors map[string]string) bool {
+	for key, value := range resourceSelectors {
+		if !labelsMatch(labels, key, value) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func findFreeServersInPool(
+	allocatedServers []string,
+	resources *hwmgrapi.ApiprotoGetResourcesResp,
+	resourceSelectors map[string]string,
+	pool string) []string {
+	freeServers := []string{}
+
+	for _, resource := range *resources.Resources {
+		if resource.ResourcePoolId == nil || *resource.ResourcePoolId != pool {
+			// This is not the pool we're looking for
+			continue
+		}
+		if lo.Contains(allocatedServers, *resource.Id) {
+			// Server is already allocated
+			continue
+		}
+
+		if !checkResourceSelectors(resource.Labels, resourceSelectors) {
+			// Server doesn't match criteria
+			continue
+		}
+
+		freeServers = append(freeServers, *resource.Id)
+	}
+	return freeServers
+}
+
+func findMatchingPool(
+	pools *hwmgrapi.ApiprotoResourcePoolsResp,
+	allocatedServers []string,
+	resources *hwmgrapi.ApiprotoGetResourcesResp,
+	resourceSelectors map[string]string) string {
+
+	for _, pool := range *pools.ResourcePools {
+		freeServers := findFreeServersInPool(allocatedServers, resources, resourceSelectors, *pool.Id)
+		if len(freeServers) > 0 {
+			return *pool.Id
+		}
+	}
+
+	return ""
+}
+
+// FindResourcePoolId checks the hardware manager inventory to find a pool with free resources that match the criteria
+func (a *Adaptor) FindResourcePoolIds(
+	ctx context.Context,
+	hwmgrClient *hwmgrclient.HardwareManagerClient,
+	nodepool *hwmgmtv1alpha1.NodePool) error {
+
+	allocatedServers, err := a.FindAllocatedServers(ctx, hwmgrClient)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "FindAllocatedServers error", slog.String("error", err.Error()))
+		return fmt.Errorf("unable to determine list of allocated servers: %w", err)
+
+	}
+
+	pools, err := hwmgrClient.GetResourcePools(ctx)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "GetResourcePools error", slog.String("error", err.Error()))
+		return fmt.Errorf("unable to query pools: %w", err)
+	}
+
+	resources, err := hwmgrClient.GetResources(ctx)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "GetResources error", slog.String("error", err.Error()))
+		return fmt.Errorf("unable to query resources: %w", err)
+	}
+
+	if nodepool.Status.SelectedPools == nil {
+		nodepool.Status.SelectedPools = make(map[string]string)
+	}
+
+	statusUpdated := false
+
+	// For each nodeGroup, find the pool that has free resource to satisfy the request
+	for _, nodegroup := range nodepool.Spec.NodeGroup {
+		if nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] != "" {
+			// The pool is already selected for this nodegroup
+			continue
+		}
+
+		if nodegroup.NodePoolData.ResourcePoolId != "" {
+			// There's a pool specified in the nodegroup, so use it
+			nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] = nodegroup.NodePoolData.ResourcePoolId
+			a.Logger.InfoContext(ctx, "Setting pool from nodegroup", slog.String("pool", nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name]))
+		} else {
+			resourceSelectors := make(map[string]string)
+
+			if nodegroup.NodePoolData.ResourceSelector != "" {
+				if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &resourceSelectors); err != nil {
+					return fmt.Errorf("unable to parse resourceSelector=%s, error=%w", nodegroup.NodePoolData.ResourceSelector, err)
+				}
+			}
+
+			matchingPool := findMatchingPool(pools, allocatedServers, resources, resourceSelectors)
+			if matchingPool == "" {
+				return fmt.Errorf("unable to find pool matching criteria: resourceSelector=%s", nodegroup.NodePoolData.ResourceSelector)
+			}
+
+			nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] = matchingPool
+			a.Logger.InfoContext(ctx, "Setting pool from analysis", slog.String("pool", nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name]))
+		}
+		statusUpdated = true
+	}
+
+	if statusUpdated {
+		if err := utils.UpdateNodePoolSelectedPools(ctx, a.Client, nodepool); err != nil {
+			return fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+		}
+	}
+	return nil
 }

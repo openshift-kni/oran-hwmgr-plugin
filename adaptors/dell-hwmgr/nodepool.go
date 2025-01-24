@@ -74,6 +74,17 @@ func (a *Adaptor) HandleNodePoolCreate(
 		return utils.DoNotRequeue(), nil
 	}
 
+	if err := a.FindResourcePoolIds(ctx, hwmgrClient, nodepool); err != nil {
+		if updateErr := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
+			"Failed to select resource pools: "+err.Error()); updateErr != nil {
+			return utils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, updateErr)
+		}
+
+		return utils.DoNotRequeue(), nil
+	}
+
 	if err := a.ProcessNewNodePool(ctx, hwmgrClient, hwmgr, nodepool); err != nil {
 		a.Logger.Error("failed createNodePool", "err", err)
 		conditionReason = hwmgmtv1alpha1.Failed
@@ -169,7 +180,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	}
 
 	// The job has completed. Get the resource group data from the hardware manager
-	rg, err := hwmgrClient.GetResourceGroup(ctx, nodepool)
+	rg, err := hwmgrClient.GetResourceGroupFromNodePool(ctx, nodepool)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "Failed GetResourceGroup", slog.String("error", err.Error()))
 

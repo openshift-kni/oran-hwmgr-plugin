@@ -2697,6 +2697,12 @@ type RhprotoResourceGroupObjectRequest struct {
 	ResourceTypeId    *string                                    `json:"resourceTypeId,omitempty"`
 }
 
+// RhprotoResourceGroupsResp defines model for rhprotoResourceGroupsResp.
+type RhprotoResourceGroupsResp struct {
+	Pagination     *ApiprotoPagination                          `json:"pagination,omitempty"`
+	ResourceGroups *[]RhprotoResourceGroupObjectGetResponseBody `json:"resourceGroups,omitempty"`
+}
+
 // RhprotoResourceSelectorFilter defines model for rhprotoResourceSelectorFilter.
 type RhprotoResourceSelectorFilter struct {
 	Exclude *map[string]interface{}               `json:"exclude,omitempty"`
@@ -2873,6 +2879,12 @@ type GetSitesInventoryParams struct {
 type GetSiteInventoryParams struct {
 	// Depth Example: 0
 	Depth *int32 `form:"depth,omitempty" json:"depth,omitempty"`
+}
+
+// GetResourceGroupsParams defines parameters for GetResourceGroups.
+type GetResourceGroupsParams struct {
+	PageNumber *string `form:"pageNumber,omitempty" json:"pageNumber,omitempty"`
+	PageSize   *string `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 }
 
 // CreateResourcePoolJSONBody defines parameters for CreateResourcePool.

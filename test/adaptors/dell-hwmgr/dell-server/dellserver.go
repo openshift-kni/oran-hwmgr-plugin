@@ -48,6 +48,10 @@ func (s DellServer) GetResourceGroup(w http.ResponseWriter, r *http.Request, ten
 	// To be implemented
 }
 
+func (s DellServer) GetResourceGroups(w http.ResponseWriter, r *http.Request, tenant string, params apiserver.GetResourceGroupsParams) {
+	// To be implemented
+}
+
 func (s DellServer) CreateResourcePool(w http.ResponseWriter, r *http.Request, tenant string) {
 	// To be implemented
 }

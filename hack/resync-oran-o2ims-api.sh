@@ -61,6 +61,9 @@ if [ -n "${DEVELOPER}" ]; then
     cmd="go mod edit -replace github.com/openshift-kni/oran-o2ims/api/hardwaremanagement=github.com/${DEVELOPER}/oran-o2ims/api/hardwaremanagement@${BRANCH}"
 fi
 
+# Remove any stale replace
+go mod edit -dropreplace github.com/openshift-kni/oran-o2ims/api/hardwaremanagement
+
 echo "Running command: ${cmd}"
 if ! bash -c "${cmd}"; then
     echo "Command failed" >&2

@@ -135,6 +135,9 @@ type ClientInterface interface {
 	// VerifyRequestStatus request
 	VerifyRequestStatus(ctx context.Context, tenant string, jobid string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetResourceGroups request
+	GetResourceGroups(ctx context.Context, tenant string, params *GetResourceGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateResourceGroupWithBody request with any body
 	CreateResourceGroupWithBody(ctx context.Context, tenant string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -390,6 +393,18 @@ func (c *Client) GetSiteInventory(ctx context.Context, tenant string, id string,
 
 func (c *Client) VerifyRequestStatus(ctx context.Context, tenant string, jobid string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewVerifyRequestStatusRequest(c.Server, tenant, jobid)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetResourceGroups(ctx context.Context, tenant string, params *GetResourceGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetResourceGroupsRequest(c.Server, tenant, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1993,6 +2008,78 @@ func NewVerifyRequestStatusRequest(server string, tenant string, jobid string) (
 	return req, nil
 }
 
+// NewGetResourceGroupsRequest generates requests for GetResourceGroups
+func NewGetResourceGroupsRequest(server string, tenant string, params *GetResourceGroupsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "Tenant", runtime.ParamLocationPath, tenant)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/resourcegroups", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "pageNumber", runtime.ParamLocationQuery, *params.PageNumber); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "pageSize", runtime.ParamLocationQuery, *params.PageSize); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateResourceGroupRequest calls the generic CreateResourceGroup builder with application/json body
 func NewCreateResourceGroupRequest(server string, tenant string, body CreateResourceGroupJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -2950,6 +3037,9 @@ type ClientWithResponsesInterface interface {
 	// VerifyRequestStatusWithResponse request
 	VerifyRequestStatusWithResponse(ctx context.Context, tenant string, jobid string, reqEditors ...RequestEditorFn) (*VerifyRequestStatusResponse, error)
 
+	// GetResourceGroupsWithResponse request
+	GetResourceGroupsWithResponse(ctx context.Context, tenant string, params *GetResourceGroupsParams, reqEditors ...RequestEditorFn) (*GetResourceGroupsResponse, error)
+
 	// CreateResourceGroupWithBodyWithResponse request with any body
 	CreateResourceGroupWithBodyWithResponse(ctx context.Context, tenant string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateResourceGroupResponse, error)
 
@@ -3339,6 +3429,29 @@ func (r VerifyRequestStatusResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r VerifyRequestStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetResourceGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RhprotoResourceGroupsResp
+	JSONDefault  *GooglerpcStatus
+}
+
+// Status returns HTTPResponse.Status
+func (r GetResourceGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetResourceGroupsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -3899,6 +4012,15 @@ func (c *ClientWithResponses) VerifyRequestStatusWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseVerifyRequestStatusResponse(rsp)
+}
+
+// GetResourceGroupsWithResponse request returning *GetResourceGroupsResponse
+func (c *ClientWithResponses) GetResourceGroupsWithResponse(ctx context.Context, tenant string, params *GetResourceGroupsParams, reqEditors ...RequestEditorFn) (*GetResourceGroupsResponse, error) {
+	rsp, err := c.GetResourceGroups(ctx, tenant, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetResourceGroupsResponse(rsp)
 }
 
 // CreateResourceGroupWithBodyWithResponse request with arbitrary body returning *CreateResourceGroupResponse
@@ -4587,6 +4709,39 @@ func ParseVerifyRequestStatusResponse(rsp *http.Response) (*VerifyRequestStatusR
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest RhprotoGooglerpcStatus
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetResourceGroupsResponse parses an HTTP response from a GetResourceGroupsWithResponse call
+func ParseGetResourceGroupsResponse(rsp *http.Response) (*GetResourceGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetResourceGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RhprotoResourceGroupsResp
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest GooglerpcStatus
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

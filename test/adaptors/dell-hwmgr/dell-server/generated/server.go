@@ -2703,6 +2703,12 @@ type RhprotoResourceGroupObjectRequest struct {
 	ResourceTypeId    *string                                    `json:"resourceTypeId,omitempty"`
 }
 
+// RhprotoResourceGroupsResp defines model for rhprotoResourceGroupsResp.
+type RhprotoResourceGroupsResp struct {
+	Pagination     *ApiprotoPagination                          `json:"pagination,omitempty"`
+	ResourceGroups *[]RhprotoResourceGroupObjectGetResponseBody `json:"resourceGroups,omitempty"`
+}
+
 // RhprotoResourceSelectorFilter defines model for rhprotoResourceSelectorFilter.
 type RhprotoResourceSelectorFilter struct {
 	Exclude *map[string]interface{}               `json:"exclude,omitempty"`
@@ -2881,6 +2887,12 @@ type GetSiteInventoryParams struct {
 	Depth *int32 `form:"depth,omitempty" json:"depth,omitempty"`
 }
 
+// GetResourceGroupsParams defines parameters for GetResourceGroups.
+type GetResourceGroupsParams struct {
+	PageNumber *string `form:"pageNumber,omitempty" json:"pageNumber,omitempty"`
+	PageSize   *string `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+}
+
 // CreateResourcePoolJSONBody defines parameters for CreateResourcePool.
 type CreateResourcePoolJSONBody struct {
 	ResourcePool *ApiprotoResourcePool `json:"ResourcePool,omitempty"`
@@ -3024,6 +3036,9 @@ type ServerInterface interface {
 	// Verify Request Status
 	// (GET /v1/tenants/{Tenant}/jobs/{jobid})
 	VerifyRequestStatus(w http.ResponseWriter, r *http.Request, tenant string, jobid string)
+	// Retrieve the list of resource groups
+	// (GET /v1/tenants/{Tenant}/resourcegroups)
+	GetResourceGroups(w http.ResponseWriter, r *http.Request, tenant string, params GetResourceGroupsParams)
 	// Create Resource Group
 	// (POST /v1/tenants/{Tenant}/resourcegroups)
 	CreateResourceGroup(w http.ResponseWriter, r *http.Request, tenant string)
@@ -3854,6 +3869,50 @@ func (siw *ServerInterfaceWrapper) VerifyRequestStatus(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// GetResourceGroups operation middleware
+func (siw *ServerInterfaceWrapper) GetResourceGroups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "Tenant" -------------
+	var tenant string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "Tenant", mux.Vars(r)["Tenant"], &tenant, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Tenant", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetResourceGroupsParams
+
+	// ------------- Optional query parameter "pageNumber" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageNumber", r.URL.Query(), &params.PageNumber)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageNumber", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageSize", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetResourceGroups(w, r, tenant, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateResourceGroup operation middleware
 func (siw *ServerInterfaceWrapper) CreateResourceGroup(w http.ResponseWriter, r *http.Request) {
 
@@ -4587,6 +4646,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/tenants/{Tenant}/inventory/sites/{Id}", wrapper.GetSiteInventory).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/tenants/{Tenant}/jobs/{jobid}", wrapper.VerifyRequestStatus).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/tenants/{Tenant}/resourcegroups", wrapper.GetResourceGroups).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/tenants/{Tenant}/resourcegroups", wrapper.CreateResourceGroup).Methods("POST")
 

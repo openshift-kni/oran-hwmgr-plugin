@@ -189,8 +189,8 @@ func NewClientWithResponses(
 	return &hwmgrClient, nil
 }
 
-// GetResourceGroup queries the hardware manager to get the resource group data
-func (c *HardwareManagerClient) GetResourceGroup(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (*hwmgrapi.RhprotoResourceGroupObjectGetResponseBody, error) {
+// GetResourceGroupFromNodePool queries the hardware manager to get the resource group data
+func (c *HardwareManagerClient) GetResourceGroupFromNodePool(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (*hwmgrapi.RhprotoResourceGroupObjectGetResponseBody, error) {
 	rg := c.ResourceGroupFromNodePool(ctx, nodepool)
 	rgId := *rg.ResourceGroup.Id
 	tenant := c.GetTenant()
@@ -202,6 +202,41 @@ func (c *HardwareManagerClient) GetResourceGroup(ctx context.Context, nodepool *
 
 	if response.StatusCode() != http.StatusOK {
 		return nil, fmt.Errorf("resource group get failed with status %s (%d), message=%s",
+			response.Status(), response.StatusCode(), string(response.Body))
+	}
+
+	return response.JSON200, nil
+}
+
+// GetResourceGroup queries the hardware manager to get the resource group data
+func (c *HardwareManagerClient) GetResourceGroupFromId(ctx context.Context, rgId string) (*hwmgrapi.RhprotoResourceGroupObjectGetResponseBody, error) {
+	tenant := c.GetTenant()
+
+	response, err := c.HwmgrClient.GetResourceGroupWithResponse(ctx, tenant, rgId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource group %s: response: %v, err: %w", rgId, response, err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("resource group get failed with status %s (%d), message=%s",
+			response.Status(), response.StatusCode(), string(response.Body))
+	}
+
+	return response.JSON200, nil
+}
+
+// GetResourceGroup queries the hardware manager to get the resource group data
+func (c *HardwareManagerClient) GetResourceGroups(ctx context.Context) (*hwmgrapi.RhprotoResourceGroupsResp, error) {
+	tenant := c.GetTenant()
+
+	params := hwmgrapi.GetResourceGroupsParams{}
+	response, err := c.HwmgrClient.GetResourceGroupsWithResponse(ctx, tenant, &params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource groups: response: %v, err: %w", response, err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("resource groups get failed with status %s (%d), message=%s",
 			response.Status(), response.StatusCode(), string(response.Body))
 	}
 
@@ -240,8 +275,10 @@ func (c *HardwareManagerClient) ResourceGroupFromNodePool(ctx context.Context, n
 				}
 			}
 		}
+
+		rpId := nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name]
 		resourceSelectors[nodegroup.NodePoolData.Name] = hwmgrapi.RhprotoResourceSelectorRequest{
-			RpId:              &nodegroup.NodePoolData.ResourcePoolId,
+			RpId:              &rpId,
 			ResourceProfileId: &nodegroup.NodePoolData.HwProfile,
 			NumResources:      &nodegroup.Size,
 			Filters: &hwmgrapi.RhprotoResourceSelectorFilter{
@@ -451,15 +488,16 @@ func (c *HardwareManagerClient) ValidateResourceGroup(
 					return fmt.Errorf("missing num of resources for node %s\n expected: %f",
 						nodegroupName, float32(nodegroup.Size))
 				}
+				rpId := nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name]
 				if resource.RpId != nil {
 					// Ensure resource pool id match
-					if nodegroup.NodePoolData.ResourcePoolId != *resource.RpId {
+					if rpId != *resource.RpId {
 						return fmt.Errorf("invalid resource pool id for node %s\n expected: %s found: %s",
-							nodegroupName, nodegroup.NodePoolData.ResourcePoolId, *resource.RpId)
+							nodegroupName, rpId, *resource.RpId)
 					}
 				} else {
 					return fmt.Errorf("missing resource pool id for node %s\n expected: %s",
-						nodegroupName, nodegroup.NodePoolData.ResourcePoolId)
+						nodegroupName, rpId)
 				}
 			} else {
 				return fmt.Errorf("validation failed, %s node does not exist in resource group", nodegroupName)

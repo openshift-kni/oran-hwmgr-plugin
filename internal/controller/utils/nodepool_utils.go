@@ -119,7 +119,32 @@ func UpdateNodePoolProperties(
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to update nodepool condition: %w", err)
+		return fmt.Errorf("failed to update nodepool properties: %w", err)
+	}
+
+	return nil
+}
+
+func UpdateNodePoolSelectedPools(
+	ctx context.Context,
+	c client.Client,
+	nodepool *hwmgmtv1alpha1.NodePool) error {
+
+	// nolint: wrapcheck
+	err := RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		newNodepool := &hwmgmtv1alpha1.NodePool{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(nodepool), newNodepool); err != nil {
+			return err
+		}
+		newNodepool.Status.SelectedPools = nodepool.Status.SelectedPools
+		if err := c.Status().Update(ctx, newNodepool); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update nodepool selectedPools: %w", err)
 	}
 
 	return nil
