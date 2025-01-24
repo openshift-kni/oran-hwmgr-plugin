@@ -30,6 +30,7 @@ import (
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
+	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -75,6 +76,9 @@ func (a *Adaptor) HandleNodePoolCreate(
 	}
 
 	if err := a.FindResourcePoolIds(ctx, hwmgrClient, nodepool); err != nil {
+		if typederrors.IsRetriableError(err) {
+			return utils.RequeueWithMediumInterval(), fmt.Errorf("failed FindResourcePoolIds with retriable error: %w", err)
+		}
 		if updateErr := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
 			"Failed to select resource pools: "+err.Error()); updateErr != nil {

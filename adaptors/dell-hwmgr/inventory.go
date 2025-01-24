@@ -26,6 +26,7 @@ import (
 	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr/hwmgrclient"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
+	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/samber/lo"
 )
@@ -367,20 +368,20 @@ func (a *Adaptor) FindResourcePoolIds(
 	allocatedServers, err := a.FindAllocatedServers(ctx, hwmgrClient)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "FindAllocatedServers error", slog.String("error", err.Error()))
-		return fmt.Errorf("unable to determine list of allocated servers: %w", err)
+		return typederrors.NewRetriableError("unable to determine list of allocated servers", err)
 
 	}
 
 	pools, err := hwmgrClient.GetResourcePools(ctx)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "GetResourcePools error", slog.String("error", err.Error()))
-		return fmt.Errorf("unable to query pools: %w", err)
+		return typederrors.NewRetriableError("unable to query pools", err)
 	}
 
 	resources, err := hwmgrClient.GetResources(ctx)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "GetResources error", slog.String("error", err.Error()))
-		return fmt.Errorf("unable to query resources: %w", err)
+		return typederrors.NewRetriableError("unable to query resources", err)
 	}
 
 	if nodepool.Status.SelectedPools == nil {
@@ -405,13 +406,13 @@ func (a *Adaptor) FindResourcePoolIds(
 
 			if nodegroup.NodePoolData.ResourceSelector != "" {
 				if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &resourceSelectors); err != nil {
-					return fmt.Errorf("unable to parse resourceSelector=%s, error=%w", nodegroup.NodePoolData.ResourceSelector, err)
+					return typederrors.NewNonRetriableError("unable to parse resourceSelector="+nodegroup.NodePoolData.ResourceSelector, err)
 				}
 			}
 
 			matchingPool := findMatchingPool(pools, allocatedServers, resources, resourceSelectors)
 			if matchingPool == "" {
-				return fmt.Errorf("unable to find pool matching criteria: resourceSelector=%s", nodegroup.NodePoolData.ResourceSelector)
+				return typederrors.NewNonRetriableError("unable to find pool matching criteria: resourceSelector="+nodegroup.NodePoolData.ResourceSelector, nil)
 			}
 
 			nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] = matchingPool
@@ -422,7 +423,7 @@ func (a *Adaptor) FindResourcePoolIds(
 
 	if statusUpdated {
 		if err := utils.UpdateNodePoolSelectedPools(ctx, a.Client, nodepool); err != nil {
-			return fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+			return typederrors.NewNonRetriableError("failed to update status for NodePool %s"+nodepool.Name, err)
 		}
 	}
 	return nil

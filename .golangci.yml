@@ -127,8 +127,10 @@ linters-settings:
   wrapcheck:
     ignoreSigs:
       - .NewConfigMapError(
-      - .NewTokenError
-      - .NewSecretError
+      - .NewTokenError(
+      - .NewSecretError(
+      - .NewRetriableError(
+      - .NewNonRetriableError(
       # defaults
       - .Errorf(
       - errors.New(
