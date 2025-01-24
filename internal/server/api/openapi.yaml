@@ -437,6 +437,9 @@ components:
         resourcePoolId:
           type: string
           example: "rh-pool-cnfdg22"
+        hwProfile:
+          type: string
+          example: "rh-profile-test-basic"
         description:
           type: string
           description: Human readable description of the resource.
@@ -525,6 +528,7 @@ components:
       required:
         - resourceId
         - resourcePoolId
+        - hwProfile
         - description
         - name
         - vendor

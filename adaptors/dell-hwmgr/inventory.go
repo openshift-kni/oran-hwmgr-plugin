@@ -182,6 +182,13 @@ func getResourceInfoResourcePoolId(resource hwmgrapi.ApiprotoResource) string {
 	return *resource.ResourcePoolId
 }
 
+func getResourceInfoResourceProfileId(resource hwmgrapi.ApiprotoResource) string {
+	if resource.ResourceProfileID == nil {
+		return ""
+	}
+	return *resource.ResourceProfileID
+}
+
 func getResourceInfoSerialNumber(server *hwmgrapi.ApiprotoServer) string {
 	if server == nil || server.Status == nil || server.Status.SerialNumber == nil {
 		return ""
@@ -223,6 +230,7 @@ func getResourceInfo(resource hwmgrapi.ApiprotoResource, server *hwmgrapi.Apipro
 		Description:      getResourceInfoDescription(resource),
 		GlobalAssetId:    getResourceInfoGlobalAsserId(resource),
 		Groups:           getResourceInfoGroups(resource),
+		HwProfile:        getResourceInfoResourceProfileId(resource),
 		Labels:           getResourceInfoLabels(resource),
 		Memory:           getResourceInfoMemory(server),
 		Model:            getResourceInfoModel(server),
