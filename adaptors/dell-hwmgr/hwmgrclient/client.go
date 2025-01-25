@@ -290,6 +290,36 @@ func (c *HardwareManagerClient) ResourceGroupFromNodePool(ctx context.Context, n
 		}
 	}
 
+	// Currently, the hardware manager requires having a "worker" resource selector, even if the number of servers requested is zero.
+	// To avoid needing to configure it in the NodePool CR, automatically add it if not already present.
+	controller := "controller"
+	worker := "worker"
+	if _, exists := resourceSelectors[worker]; !exists {
+		// Copy the data from the "controller" selector
+		if controllerSelector, exists := resourceSelectors[controller]; exists {
+			inclusions := []hwmgrapi.RhprotoResourceSelectorFilterIncludeLabel{
+				{
+					Key:   &roleKey,
+					Value: &worker,
+				},
+			}
+
+			numResources := 0
+			resourceSelectors[worker] = hwmgrapi.RhprotoResourceSelectorRequest{
+				RpId:              controllerSelector.RpId,
+				ResourceProfileId: controllerSelector.ResourceProfileId,
+				NumResources:      &numResources,
+				Filters: &hwmgrapi.RhprotoResourceSelectorFilter{
+					Include: &hwmgrapi.RhprotoResourceSelectorFilterInclude{
+						Labels: &inclusions,
+					},
+					Exclude: &excludes,
+				},
+			}
+
+		}
+	}
+
 	rg := hwmgrapi.CreateResourceGroupJSONRequestBody{
 		Tenant: &tenant,
 		ResourceGroup: &hwmgrapi.RhprotoResourceGroupObjectRequest{
