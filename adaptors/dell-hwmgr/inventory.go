@@ -355,16 +355,30 @@ func findMatchingPool(
 	pools *hwmgrapi.ApiprotoResourcePoolsResp,
 	allocatedServers []string,
 	resources *hwmgrapi.ApiprotoGetResourcesResp,
-	resourceSelectors map[string]string) string {
+	resourceSelectors map[string]string,
+	numServers int) string {
 
 	for _, pool := range *pools.ResourcePools {
 		freeServers := findFreeServersInPool(allocatedServers, resources, resourceSelectors, *pool.Id)
-		if len(freeServers) > 0 {
+		if len(freeServers) >= numServers {
 			return *pool.Id
 		}
 	}
 
 	return ""
+}
+
+func poolExists(
+	pools *hwmgrapi.ApiprotoResourcePoolsResp,
+	pool string) bool {
+
+	for _, iter := range *pools.ResourcePools {
+		if iter.Id != nil && *iter.Id == pool {
+			return true
+		}
+	}
+
+	return false
 }
 
 // FindResourcePoolId checks the hardware manager inventory to find a pool with free resources that match the criteria
@@ -405,20 +419,34 @@ func (a *Adaptor) FindResourcePoolIds(
 			continue
 		}
 
+		resourceSelectors := make(map[string]string)
+
+		if nodegroup.NodePoolData.ResourceSelector != "" {
+			if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &resourceSelectors); err != nil {
+				return typederrors.NewNonRetriableError("unable to parse resourceSelector="+nodegroup.NodePoolData.ResourceSelector, err)
+			}
+		}
+
 		if nodegroup.NodePoolData.ResourcePoolId != "" {
 			// There's a pool specified in the nodegroup, so use it
-			nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] = nodegroup.NodePoolData.ResourcePoolId
-			a.Logger.InfoContext(ctx, "Setting pool from nodegroup", slog.String("pool", nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name]))
-		} else {
-			resourceSelectors := make(map[string]string)
 
-			if nodegroup.NodePoolData.ResourceSelector != "" {
-				if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &resourceSelectors); err != nil {
-					return typederrors.NewNonRetriableError("unable to parse resourceSelector="+nodegroup.NodePoolData.ResourceSelector, err)
+			// Check whether the pool exists on hardware manager
+			if !poolExists(pools, nodegroup.NodePoolData.ResourcePoolId) {
+				return typederrors.NewNonRetriableError("pool specified in nodegroup does not exist on hardware manager, nodegroup="+nodegroup.NodePoolData.Name, nil)
+			}
+
+			if nodegroup.Size > 0 {
+				// Check whether there are free servers that match the specified criteria
+				freeServers := findFreeServersInPool(allocatedServers, resources, resourceSelectors, nodegroup.NodePoolData.ResourcePoolId)
+				if len(freeServers) < nodegroup.Size {
+					return typederrors.NewNonRetriableError("pool specified in node group does not have enough matching resources, nodegroup="+nodegroup.NodePoolData.Name, err)
 				}
 			}
 
-			matchingPool := findMatchingPool(pools, allocatedServers, resources, resourceSelectors)
+			nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] = nodegroup.NodePoolData.ResourcePoolId
+			a.Logger.InfoContext(ctx, "Setting pool from nodegroup", slog.String("pool", nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name]))
+		} else {
+			matchingPool := findMatchingPool(pools, allocatedServers, resources, resourceSelectors, nodegroup.Size)
 			if matchingPool == "" {
 				return typederrors.NewNonRetriableError("unable to find pool matching criteria: resourceSelector="+nodegroup.NodePoolData.ResourceSelector, nil)
 			}
