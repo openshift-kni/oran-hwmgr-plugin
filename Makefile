@@ -416,7 +416,8 @@ ci-job: deps-update generate fmt vet lint test bundle-check
 .PHONY: scorecard-test
 scorecard-test: operator-sdk
 	@test -n "$(KUBECONFIG)" || (echo "The environment variable KUBECONFIG must not empty" && false)
-	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(HWMGR_PLUGIN_NAMESPACE)
+	oc create ns $(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
+	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(HWMGR_PLUGIN_NAMESPACE) --pod-security=restricted
 
 ## Adaptors
 DELL_ADAPTOR_DIR ?= adaptors/dell-hwmgr
