@@ -57,8 +57,8 @@ Example test NodePool CRs can also be found in the [examples](examples) folder.
 
 ```console
 $ ./examples/nodelist-generator.sh \
-    --profile profile-spr-single-processor-64G:dummy-sp-64g:5 \
-	--profile profile-spr-dual-processor-128G:dummy-dp-128g:3 \
+    --resourcepool profile-spr-single-processor-64G:dummy-sp-64g:5 \
+	--resourcepool profile-spr-dual-processor-128G:dummy-dp-128g:3 \
 	| oc create -f -
 configmap/loopback-adaptor-nodelist created
 ```

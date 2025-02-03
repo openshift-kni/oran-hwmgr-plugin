@@ -55,10 +55,32 @@ function nodes {
             nodename=${prefix}-${i}
             ip="192.168.${group}.${i}"
             mac=$(printf "c6:b6:13:a0:%02x:%02x" ${group} ${i})
+            serial=$(printf "SNLB2025%05d" ${i})
+            part=$(printf "PNLB2025%05d" ${i})
+            asset=$(printf "GA2025%05d" ${i})
 
             cat <<EOF
       ${nodename}:
+        description: "Red Hat Loopback Node"
+        globalAssetId: ${asset}
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: ${serial}
+        partNumber: ${part}
         poolID: ${pool}
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://${ip}/redfish/v1/Systems/System.Embedded.1"
           username-base64: ${USERNAME_BASE64}

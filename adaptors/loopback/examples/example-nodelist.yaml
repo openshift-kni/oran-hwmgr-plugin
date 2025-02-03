@@ -10,7 +10,26 @@ data:
       - worker
     nodes:
       dummy-dp-128g-0:
-        poolID: worker
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500000
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500000
+        partNumber: PNLB202500000
+        poolID: master
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://192.168.1.0/redfish/v1/Systems/System.Embedded.1"
           username-base64: YWRtaW4=
@@ -20,7 +39,26 @@ data:
             label: bootable-interface
             macAddress: "c6:b6:13:a0:01:00"
       dummy-dp-128g-1:
-        poolID: worker
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500001
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500001
+        partNumber: PNLB202500001
+        poolID: master
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://192.168.1.1/redfish/v1/Systems/System.Embedded.1"
           username-base64: YWRtaW4=
@@ -30,7 +68,26 @@ data:
             label: bootable-interface
             macAddress: "c6:b6:13:a0:01:01"
       dummy-dp-128g-2:
-        poolID: worker
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500002
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500002
+        partNumber: PNLB202500002
+        poolID: master
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://192.168.1.2/redfish/v1/Systems/System.Embedded.1"
           username-base64: YWRtaW4=
@@ -39,8 +96,85 @@ data:
           - name: eth0
             label: bootable-interface
             macAddress: "c6:b6:13:a0:01:02"
-      dummy-sp-64g-0:
+      dummy-dp-128g-3:
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500003
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500003
+        partNumber: PNLB202500003
         poolID: master
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
+        bmc:
+          address: "idrac-virtualmedia+https://192.168.1.3/redfish/v1/Systems/System.Embedded.1"
+          username-base64: YWRtaW4=
+          password-base64: bXlwYXNz
+        interfaces:
+          - name: eth0
+            label: bootable-interface
+            macAddress: "c6:b6:13:a0:01:03"
+      dummy-dp-128g-4:
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500004
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500004
+        partNumber: PNLB202500004
+        poolID: master
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
+        bmc:
+          address: "idrac-virtualmedia+https://192.168.1.4/redfish/v1/Systems/System.Embedded.1"
+          username-base64: YWRtaW4=
+          password-base64: bXlwYXNz
+        interfaces:
+          - name: eth0
+            label: bootable-interface
+            macAddress: "c6:b6:13:a0:01:04"
+      dummy-sp-64g-0:
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500000
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500000
+        partNumber: PNLB202500000
+        poolID: worker
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://192.168.2.0/redfish/v1/Systems/System.Embedded.1"
           username-base64: YWRtaW4=
@@ -50,7 +184,26 @@ data:
             label: bootable-interface
             macAddress: "c6:b6:13:a0:02:00"
       dummy-sp-64g-1:
-        poolID: master
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500001
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500001
+        partNumber: PNLB202500001
+        poolID: worker
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://192.168.2.1/redfish/v1/Systems/System.Embedded.1"
           username-base64: YWRtaW4=
@@ -60,7 +213,26 @@ data:
             label: bootable-interface
             macAddress: "c6:b6:13:a0:02:01"
       dummy-sp-64g-2:
-        poolID: master
+        description: "Red Hat Loopback Node"
+        globalAssetId: GA202500002
+        vendor: "Red Hat"
+        model: "Loopback"
+        memory: 32768
+        adminState: UNLOCKED
+        operationalState: ENABLED
+        powerState: ON
+        usageState: IDLE
+        serialNumber: SNLB202500002
+        partNumber: PNLB202500002
+        poolID: worker
+        processors:
+          - architecture: x86-64
+            cores: 32
+            manufacturer: Intel
+            model: Intel(R) Xeon(R) Gold 6230R CPU @ 2.10GHz
+        labels:
+          node-type: loopback
+          color: red
         bmc:
           address: "idrac-virtualmedia+https://192.168.2.2/redfish/v1/Systems/System.Embedded.1"
           username-base64: YWRtaW4=
@@ -69,23 +241,3 @@ data:
           - name: eth0
             label: bootable-interface
             macAddress: "c6:b6:13:a0:02:02"
-      dummy-sp-64g-3:
-        poolID: master
-        bmc:
-          address: "idrac-virtualmedia+https://192.168.2.3/redfish/v1/Systems/System.Embedded.1"
-          username-base64: YWRtaW4=
-          password-base64: bXlwYXNz
-        interfaces:
-          - name: eth0
-            label: bootable-interface
-            macAddress: "c6:b6:13:a0:02:03"
-      dummy-sp-64g-4:
-        poolID: master
-        bmc:
-          address: "idrac-virtualmedia+https://192.168.2.4/redfish/v1/Systems/System.Embedded.1"
-          username-base64: YWRtaW4=
-          password-base64: bXlwYXNz
-        interfaces:
-          - name: eth0
-            label: bootable-interface
-            macAddress: "c6:b6:13:a0:02:04"

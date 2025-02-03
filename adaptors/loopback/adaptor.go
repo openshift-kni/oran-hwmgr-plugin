@@ -22,16 +22,17 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/loopback/controller"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
-	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
-	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/loopback/controller"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 )
 
 type Adaptor struct {
@@ -151,6 +152,19 @@ func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.Ha
 	return resp, http.StatusOK, nil
 }
 
+func convertProcessorInfo(infos []processorInfo) []invserver.ProcessorInfo {
+	result := make([]invserver.ProcessorInfo, len(infos))
+	for i, info := range infos {
+		result[i] = invserver.ProcessorInfo{
+			Architecture: &info.Architecture,
+			Cores:        &info.Cores,
+			Model:        &info.Model,
+			Manufacturer: &info.Manufacturer,
+		}
+	}
+	return result
+}
+
 func (a *Adaptor) GetResources(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourceInfo, int, error) {
 	var resp []invserver.ResourceInfo
 
@@ -159,12 +173,28 @@ func (a *Adaptor) GetResources(ctx context.Context, hwmgr *pluginv1alpha1.Hardwa
 		return resp, http.StatusServiceUnavailable, fmt.Errorf("unable to get current resources: %w", err)
 	}
 
-	notavailable := "n/a" // Some data isn't available from dtias
 	for name, server := range resources.Nodes {
+		powerState := invserver.ResourceInfoPowerState("ON")
 		resp = append(resp, invserver.ResourceInfo{
-			ResourcePoolId: server.ResourcePoolID,
-			Description:    notavailable,
-			Name:           name,
+			AdminState:       invserver.ResourceInfoAdminState(server.AdminState),
+			Description:      server.Description,
+			GlobalAssetId:    &server.GlobalAssetID,
+			Groups:           nil,
+			HwProfile:        "loopback-profile",
+			Labels:           &server.Labels,
+			Memory:           server.Memory,
+			Model:            server.Model,
+			Name:             name,
+			OperationalState: invserver.ResourceInfoOperationalState(server.OperationalState),
+			PartNumber:       server.PartNumber,
+			PowerState:       &powerState,
+			Processors:       convertProcessorInfo(server.Processors),
+			ResourceId:       name,
+			ResourcePoolId:   server.ResourcePoolID,
+			SerialNumber:     server.SerialNumber,
+			Tags:             nil,
+			UsageState:       invserver.ResourceInfoUsageState(server.UsageState),
+			Vendor:           server.Vendor,
 		})
 	}
 	return resp, http.StatusOK, nil

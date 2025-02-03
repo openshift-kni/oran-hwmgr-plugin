@@ -22,11 +22,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	adaptorinterface "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/adaptor-interface"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
-	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
-	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
-	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +30,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	adaptorinterface "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/adaptor-interface"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
+	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 
 	// Import the adaptors
 	dellhwmgr "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr"
@@ -204,6 +205,7 @@ func (c *HwMgrAdaptorController) GetResourcePools(ctx context.Context, request i
 
 	resp, statusCode, err := adaptor.GetResourcePools(ctx, hwmgr)
 	if err != nil {
+		c.Logger.Error("unable to get resource pools from hardware manager", "hwMgrId", request.HwMgrId, "error", err)
 		return invserver.GetResourcePools500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
 			Status: statusCode,
 			Detail: fmt.Sprintf("Resource Pool query failed for %s: %s", request.HwMgrId, err.Error()),
@@ -246,6 +248,7 @@ func (c *HwMgrAdaptorController) GetResources(ctx context.Context, request invse
 
 	resp, statusCode, err := adaptor.GetResources(ctx, hwmgr)
 	if err != nil {
+		c.Logger.Error("unable to get resources from hardware manager", "hwMgrId", request.HwMgrId, "error", err)
 		return invserver.GetResources500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
 			Status: statusCode,
 			Detail: fmt.Sprintf("Resource query failed for %s: %s", request.HwMgrId, err.Error()),

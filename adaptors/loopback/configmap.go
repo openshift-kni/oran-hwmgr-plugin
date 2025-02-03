@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 )
 
 // Struct definitions for the nodelist configmap
@@ -33,10 +34,30 @@ type cmBmcInfo struct {
 	PasswordBase64 string `json:"password-base64,omitempty"`
 }
 
+type processorInfo struct {
+	Architecture string `json:"architecture,omitempty"`
+	Cores        int    `json:"cores,omitempty"`
+	Manufacturer string `json:"manufacturer,omitempty"`
+	Model        string `json:"model,omitempty"`
+}
+
 type cmNodeInfo struct {
-	ResourcePoolID string                      `json:"poolID,omitempty"`
-	BMC            *cmBmcInfo                  `json:"bmc,omitempty"`
-	Interfaces     []*hwmgmtv1alpha1.Interface `json:"interfaces,omitempty"`
+	ResourcePoolID   string                      `json:"poolID,omitempty"`
+	BMC              *cmBmcInfo                  `json:"bmc,omitempty"`
+	Interfaces       []*hwmgmtv1alpha1.Interface `json:"interfaces,omitempty"`
+	Description      string                      `json:"description,omitempty"`
+	GlobalAssetID    string                      `json:"globalAssetId,omitempty"`
+	Vendor           string                      `json:"vendor,omitempty"`
+	Model            string                      `json:"model,omitempty"`
+	Memory           int                         `json:"memory,omitempty"`
+	AdminState       string                      `json:"adminState,omitempty"`
+	OperationalState string                      `json:"operationalState,omitempty"`
+	UsageState       string                      `json:"usageState,omitempty"`
+	PowerState       string                      `json:"powerState,omitempty"`
+	SerialNumber     string                      `json:"serialNumber,omitempty"`
+	PartNumber       string                      `json:"partNumber,omitempty"`
+	Labels           map[string]string           `json:"labels,omitempty"`
+	Processors       []processorInfo             `json:"processors,omitempty"`
 }
 
 type cmResources struct {
