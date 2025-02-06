@@ -86,8 +86,8 @@ github.com/fsnotify/fsnotify
 # github.com/fxamacker/cbor/v2 v2.7.0
 ## explicit; go 1.17
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.128.0
-## explicit; go 1.20
+# github.com/getkin/kin-openapi v0.129.0
+## explicit; go 1.22.5
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter
 github.com/getkin/kin-openapi/routers
@@ -224,9 +224,6 @@ github.com/imdario/mergo
 # github.com/integralist/go-findroot v0.0.0-20160518114804-ac90681525dc
 ## explicit
 github.com/integralist/go-findroot/find
-# github.com/invopop/yaml v0.3.1
-## explicit; go 1.14
-github.com/invopop/yaml
 # github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99
 ## explicit
 github.com/jbenet/go-context/io
@@ -270,6 +267,12 @@ github.com/oapi-codegen/oapi-codegen/v2/pkg/util
 github.com/oapi-codegen/runtime
 github.com/oapi-codegen/runtime/strictmiddleware/nethttp
 github.com/oapi-codegen/runtime/types
+# github.com/oasdiff/yaml v0.0.0-20241210131133-6b86fb107d80
+## explicit; go 1.22.5
+github.com/oasdiff/yaml
+# github.com/oasdiff/yaml3 v0.0.0-20241210130736-a94c01f36349
+## explicit; go 1.22.5
+github.com/oasdiff/yaml3
 # github.com/onsi/ginkgo/v2 v2.22.2
 ## explicit; go 1.22.0
 github.com/onsi/ginkgo/v2
