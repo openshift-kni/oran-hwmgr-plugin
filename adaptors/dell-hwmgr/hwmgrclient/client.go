@@ -99,23 +99,21 @@ func (c *HardwareManagerClient) GetToken(ctx context.Context) (string, error) {
 
 	tokenrsp, err := c.HwmgrClient.GetTokenWithResponse(ctx, req)
 	if err != nil {
-		return "", typederrors.NewTokenError(fmt.Sprintf("failed to get token: response: %v", tokenrsp), err)
+		return "", typederrors.NewTokenError(err, "failed to get token: response: %v", tokenrsp)
 	}
 
 	if tokenrsp.StatusCode() != http.StatusOK {
-		return "", typederrors.NewTokenError(fmt.Sprintf("token request failed with status %s (%d), message=%s",
-			tokenrsp.Status(), tokenrsp.StatusCode(), string(tokenrsp.Body)), nil)
+		return "", typederrors.NewTokenError(nil, "token request failed with status %s (%d), message=%s",
+			tokenrsp.Status(), tokenrsp.StatusCode(), string(tokenrsp.Body))
 	}
 
 	var tokenData hwmgrapi.RhprotoGetTokenResponseBody
 	if err := json.Unmarshal(tokenrsp.Body, &tokenData); err != nil {
-		return "", typederrors.NewTokenError(
-			fmt.Sprintf("failed to parse token: response: %v", tokenrsp), err)
+		return "", typederrors.NewTokenError(err, "failed to parse token: response: %v", tokenrsp)
 	}
 
 	if tokenData.AccessToken == nil {
-		return "", typederrors.NewTokenError(
-			fmt.Sprintf("failed to get token: access_token field empty: %v", tokenrsp), nil)
+		return "", typederrors.NewTokenError(nil, "failed to get token: access_token field empty: %v", tokenrsp)
 	}
 	return *tokenData.AccessToken, nil
 }

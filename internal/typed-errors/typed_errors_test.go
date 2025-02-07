@@ -17,13 +17,13 @@ func TestErrors(t *testing.T) {
 		Err:     e,
 	}
 	ew := fmt.Errorf("a standard error wraps a GenericError: %w", ge)
-	te := NewTokenError("a TokenError", nil)
-	tew := NewTokenError("a TokenError wraps a standard error", e)
-	cme := NewConfigMapError("a ConfigMapError", nil)
-	cmew := NewConfigMapError("a ConfigMapError wraps a standard error", e)
-	cmew2 := NewConfigMapError("a ConfigMapError wraps a TokenError", te)
+	te := NewTokenError(nil, "a TokenError")
+	tew := NewTokenError(e, "a TokenError wraps a %s", "standard error")
+	cme := NewConfigMapError(nil, "a ConfigMapError")
+	cmew := NewConfigMapError(e, "a ConfigMapError wraps a %s", "standard error")
+	cmew2 := NewConfigMapError(te, "a ConfigMapError wraps a %s", "TokenError")
 	ew2 := fmt.Errorf("a standard error wraps a TokenError: %w", te)
-	cmew3 := NewConfigMapError("a ConfigMapError wraps a standard error which wraps a TokenError", ew2)
+	cmew3 := NewConfigMapError(ew2, "a ConfigMapError wraps a %s which wraps a %s", "standard error", "TokenError")
 
 	tests := []struct {
 		description            string

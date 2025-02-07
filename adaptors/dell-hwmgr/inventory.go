@@ -390,20 +390,20 @@ func (a *Adaptor) FindResourcePoolIds(
 	allocatedServers, err := a.FindAllocatedServers(ctx, hwmgrClient)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "FindAllocatedServers error", slog.String("error", err.Error()))
-		return typederrors.NewRetriableError("unable to determine list of allocated servers", err)
+		return typederrors.NewRetriableError(err, "unable to determine list of allocated servers")
 
 	}
 
 	pools, err := hwmgrClient.GetResourcePools(ctx)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "GetResourcePools error", slog.String("error", err.Error()))
-		return typederrors.NewRetriableError("unable to query pools", err)
+		return typederrors.NewRetriableError(err, "unable to query pools")
 	}
 
 	resources, err := hwmgrClient.GetResources(ctx)
 	if err != nil {
 		a.Logger.InfoContext(ctx, "GetResources error", slog.String("error", err.Error()))
-		return typederrors.NewRetriableError("unable to query resources", err)
+		return typederrors.NewRetriableError(err, "unable to query resources")
 	}
 
 	if nodepool.Status.SelectedPools == nil {
@@ -423,7 +423,7 @@ func (a *Adaptor) FindResourcePoolIds(
 
 		if nodegroup.NodePoolData.ResourceSelector != "" {
 			if err := json.Unmarshal([]byte(nodegroup.NodePoolData.ResourceSelector), &resourceSelectors); err != nil {
-				return typederrors.NewNonRetriableError("unable to parse resourceSelector="+nodegroup.NodePoolData.ResourceSelector, err)
+				return typederrors.NewNonRetriableError(err, "unable to parse resourceSelector: %s", nodegroup.NodePoolData.ResourceSelector)
 			}
 		}
 
@@ -432,14 +432,14 @@ func (a *Adaptor) FindResourcePoolIds(
 
 			// Check whether the pool exists on hardware manager
 			if !poolExists(pools, nodegroup.NodePoolData.ResourcePoolId) {
-				return typederrors.NewNonRetriableError("pool specified in nodegroup does not exist on hardware manager, nodegroup="+nodegroup.NodePoolData.Name, nil)
+				return typederrors.NewNonRetriableError(nil, "pool specified in nodegroup does not exist on hardware manager, nodegroup: %s", nodegroup.NodePoolData.Name)
 			}
 
 			if nodegroup.Size > 0 {
 				// Check whether there are free servers that match the specified criteria
 				freeServers := findFreeServersInPool(allocatedServers, resources, resourceSelectors, nodegroup.NodePoolData.ResourcePoolId)
 				if len(freeServers) < nodegroup.Size {
-					return typederrors.NewNonRetriableError("pool specified in node group does not have enough matching resources, nodegroup="+nodegroup.NodePoolData.Name, err)
+					return typederrors.NewNonRetriableError(err, "pool specified in node group does not have enough matching resources, nodegroup:%s", nodegroup.NodePoolData.Name)
 				}
 			}
 
@@ -448,7 +448,7 @@ func (a *Adaptor) FindResourcePoolIds(
 		} else {
 			matchingPool := findMatchingPool(pools, allocatedServers, resources, resourceSelectors, nodegroup.Size)
 			if matchingPool == "" {
-				return typederrors.NewNonRetriableError("unable to find pool matching criteria: resourceSelector="+nodegroup.NodePoolData.ResourceSelector, nil)
+				return typederrors.NewNonRetriableError(nil, "unable to find pool matching criteria: resourceSelector: %s", nodegroup.NodePoolData.ResourceSelector)
 			}
 
 			nodepool.Status.SelectedPools[nodegroup.NodePoolData.Name] = matchingPool
@@ -459,7 +459,7 @@ func (a *Adaptor) FindResourcePoolIds(
 
 	if statusUpdated {
 		if err := utils.UpdateNodePoolSelectedPools(ctx, a.Client, nodepool); err != nil {
-			return typederrors.NewNonRetriableError("failed to update status for NodePool %s"+nodepool.Name, err)
+			return typederrors.NewNonRetriableError(err, "failed to update status for NodePool %s", nodepool.Name)
 		}
 	}
 	return nil

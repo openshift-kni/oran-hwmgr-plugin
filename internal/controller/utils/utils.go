@@ -144,14 +144,13 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 	cmExists, err := DoesK8SResourceExist(
 		ctx, c, name, namespace, existingConfigmap)
 	if err != nil {
-		return nil, typederrors.NewConfigMapError(fmt.Sprintf(
-			"failed to check configMap %s in the namespace %s", name, namespace), err)
+		return nil, typederrors.NewConfigMapError(err, "failed to check configMap %s in the namespace %s", name, namespace)
 	}
 
 	if !cmExists {
 		// Check if the configmap is missing
-		return nil, typederrors.NewConfigMapError(fmt.Sprintf(
-			"the ConfigMap %s is not found in the namespace %s", name, namespace), nil)
+		return nil, typederrors.NewConfigMapError(nil,
+			"the ConfigMap %s is not found in the namespace %s", name, namespace)
 	}
 	return existingConfigmap, nil
 }
@@ -160,8 +159,7 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
 	data, ok := cm.Data[fieldName]
 	if !ok {
-		return data, typederrors.NewConfigMapError(
-			fmt.Sprintf("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName), nil)
+		return data, typederrors.NewConfigMapError(nil, "the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName)
 	}
 
 	return data, nil
@@ -180,8 +178,8 @@ func ExtractDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey string) (
 	err = yaml.Unmarshal([]byte(defaults), &validData)
 	if err != nil {
 		return validData, typederrors.NewConfigMapError(
-			fmt.Sprintf("the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
-				expectedKey, cm.GetName(), err.Error()), err)
+			err, "the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
+			expectedKey, cm.GetName(), err.Error())
 	}
 	return validData, nil
 }
@@ -195,8 +193,7 @@ func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*c
 	}
 
 	if !exists {
-		return nil, typederrors.NewSecretError(
-			fmt.Sprintf("the Secret '%s' is not found in the namespace '%s'", name, namespace), nil)
+		return nil, typederrors.NewSecretError(nil, "the Secret '%s' is not found in the namespace '%s'", name, namespace)
 	}
 	return secret, nil
 }
@@ -205,8 +202,7 @@ func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*c
 func GetSecretField(secret *corev1.Secret, fieldName string) (string, error) {
 	encoded, ok := secret.Data[fieldName]
 	if !ok {
-		return "", typederrors.NewSecretError(
-			fmt.Sprintf("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName), nil)
+		return "", typederrors.NewSecretError(nil, "the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName)
 	}
 
 	return string(encoded), nil

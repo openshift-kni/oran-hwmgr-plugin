@@ -16,7 +16,10 @@ limitations under the License.
 
 package typederrors
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // GenericError is an error structure containing common fields to be
 // embedded by specific error types defined below
@@ -38,9 +41,9 @@ type ConfigMapError struct {
 	GenericError
 }
 
-func NewConfigMapError(m string, e error) error {
+func NewConfigMapError(err error, format string, args ...interface{}) error {
 	return ConfigMapError{
-		GenericError: GenericError{m, e},
+		GenericError: GenericError{fmt.Sprintf(format, args...), err},
 	}
 }
 
@@ -54,9 +57,9 @@ type TokenError struct {
 	GenericError
 }
 
-func NewTokenError(m string, e error) error {
+func NewTokenError(err error, format string, args ...interface{}) error {
 	return TokenError{
-		GenericError: GenericError{m, e},
+		GenericError: GenericError{fmt.Sprintf(format, args...), err},
 	}
 }
 
@@ -70,9 +73,9 @@ type SecretError struct {
 	GenericError
 }
 
-func NewSecretError(m string, e error) error {
+func NewSecretError(err error, format string, args ...interface{}) error {
 	return SecretError{
-		GenericError: GenericError{m, e},
+		GenericError: GenericError{fmt.Sprintf(format, args...), err},
 	}
 }
 
@@ -86,9 +89,9 @@ type RetriableError struct {
 	GenericError
 }
 
-func NewRetriableError(m string, e error) error {
+func NewRetriableError(err error, format string, args ...interface{}) error {
 	return RetriableError{
-		GenericError: GenericError{m, e},
+		GenericError: GenericError{fmt.Sprintf(format, args...), err},
 	}
 }
 
@@ -102,9 +105,9 @@ type NonRetriableError struct {
 	GenericError
 }
 
-func NewNonRetriableError(m string, e error) error {
+func NewNonRetriableError(err error, format string, args ...interface{}) error {
 	return NonRetriableError{
-		GenericError: GenericError{m, e},
+		GenericError: GenericError{fmt.Sprintf(format, args...), err},
 	}
 }
 
