@@ -301,10 +301,9 @@ func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 
 	// TODO: Can we even requeue the finalizer? If so, we should have a separate annotation for this jobID.
 	// For now, poll until the job finishes
-	finished := false
-	for !finished {
-		time.Sleep(time.Second * 10)
-		a.Logger.InfoContext(ctx, "Checking deletion job progress")
+	maxRetries := 30 // ~2.5 minutes
+	for counter := 0; counter < maxRetries; counter++ {
+		time.Sleep(time.Second * 5)
 
 		status, failReason, err := hwmgrClient.CheckJobStatus(ctx, jobId)
 		if err != nil {
@@ -312,11 +311,23 @@ func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 			return fmt.Errorf("deletion job progress check failed: %w", err)
 		}
 
-		// TODO: Currently, the hardware manager is clearing the job immediately on deletion, so the check fails
-		a.Logger.InfoContext(ctx, "Deletion job progress check returned", slog.Any("status", status), slog.String("failReason", failReason))
+		// Process the status response
+		switch status {
+		case hwmgrclient.JobStatusInProgress:
+			a.Logger.InfoContext(ctx, "Deletion job is in progress")
+		case hwmgrclient.JobStatusFailed:
+			a.Logger.ErrorContext(ctx, "Deletion job failed", slog.String("failReason", failReason))
+			return fmt.Errorf("deletion job failed: faileReason=%s", failReason)
+		case hwmgrclient.JobStatusCompleted:
+			a.Logger.InfoContext(ctx, "Deletion job has completed")
+			return nil
+		default:
+			a.Logger.InfoContext(ctx, "Deletion job check returned unknown status", slog.Any("status", status), slog.String("failReason", failReason))
+		}
 	}
 
-	return nil
+	a.Logger.InfoContext(ctx, "Deletion job timed out")
+	return fmt.Errorf("deletion job timed out")
 }
 
 func (a *Adaptor) handleNodePoolConfiguring(

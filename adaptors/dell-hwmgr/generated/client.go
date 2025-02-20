@@ -3416,7 +3416,7 @@ type VerifyRequestStatusResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *RhprotoJobStatus
-	JSONDefault  *RhprotoGooglerpcStatus
+	JSONDefault  *GooglerpcStatus
 }
 
 // Status returns HTTPResponse.Status
@@ -4708,7 +4708,7 @@ func ParseVerifyRequestStatusResponse(rsp *http.Response) (*VerifyRequestStatusR
 		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest RhprotoGooglerpcStatus
+		var dest GooglerpcStatus
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

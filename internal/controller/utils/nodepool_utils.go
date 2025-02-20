@@ -193,7 +193,7 @@ func NodepoolAddFinalizer(
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to remove finalizer from nodepool: %w", err)
+		return fmt.Errorf("failed to add finalizer to nodepool: %w", err)
 	}
 	return nil
 }

@@ -375,7 +375,7 @@ func (c *HardwareManagerClient) CheckJobStatus(ctx context.Context, jobId string
 	}
 
 	if response.StatusCode() != http.StatusOK {
-		return JobStatusUnknown, failReason, fmt.Errorf("job query failed for %s: %s", jobId, *response.JSONDefault.Message)
+		return JobStatusUnknown, failReason, fmt.Errorf("job query failed for %s: %s, body=%s", jobId, *response.JSONDefault.Message, string(response.Body))
 	}
 
 	status := response.JSON200
