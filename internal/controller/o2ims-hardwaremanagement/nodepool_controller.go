@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -38,6 +39,7 @@ import (
 type NodePoolReconciler struct {
 	ctrl.Manager
 	client.Client
+	cache.Cache
 	Scheme         *runtime.Scheme
 	Logger         *slog.Logger
 	Namespace      string
@@ -86,6 +88,9 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		r.Logger.InfoContext(ctx, "NodePool field indexer initialized")
 		r.indexerEnabled = true
 	}
+
+	// Wait for the cache to sync to ensure we're getting an up-to-date CR
+	r.Cache.WaitForCacheSync(ctx)
 
 	// Fetch the nodepool:
 	nodepool := &hwmgmtv1alpha1.NodePool{}
@@ -137,6 +142,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.Cache = mgr.GetCache()
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&hwmgmtv1alpha1.NodePool{}).
 		Complete(r); err != nil {
