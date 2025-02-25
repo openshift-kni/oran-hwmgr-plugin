@@ -150,10 +150,10 @@ func (c *HwMgrAdaptorController) HandleNodePool(ctx context.Context, nodepool *h
 }
 
 // HandleNodePool calls the applicable adaptor handler to process the NodePool CR deletion
-func (c *HwMgrAdaptorController) HandleNodePoolDeletion(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
+func (c *HwMgrAdaptorController) HandleNodePoolDeletion(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
 	hwmgr, _, err := c.getHwMgr(ctx, nodepool.Spec.HwMgrId)
 	if err != nil {
-		return fmt.Errorf("failed to get HardwareManager CR (%s): %w", nodepool.Spec.HwMgrId, err)
+		return false, fmt.Errorf("failed to get HardwareManager CR (%s): %w", nodepool.Spec.HwMgrId, err)
 	}
 
 	adaptorID := string(hwmgr.Spec.AdaptorID)
@@ -162,14 +162,15 @@ func (c *HwMgrAdaptorController) HandleNodePoolDeletion(ctx context.Context, nod
 	adaptor, exists := c.adaptors[adaptorID]
 	if !exists {
 		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
-		return nil
+		return true, nil
 	}
 
-	if err := adaptor.HandleNodePoolDeletion(ctx, hwmgr, nodepool); err != nil {
-		return fmt.Errorf("failed HandleNodePoolDeletion for adaptorID %s: %w", adaptorID, err)
+	completed, err := adaptor.HandleNodePoolDeletion(ctx, hwmgr, nodepool)
+	if err != nil {
+		return false, fmt.Errorf("failed HandleNodePoolDeletion for adaptorID %s: %w", adaptorID, err)
 	}
 
-	return nil
+	return completed, nil
 }
 
 // HandleNodePool calls the applicable adaptor handler to process the NodePool CR deletion

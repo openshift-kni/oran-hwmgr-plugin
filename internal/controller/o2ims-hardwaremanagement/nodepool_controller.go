@@ -38,11 +38,12 @@ import (
 type NodePoolReconciler struct {
 	ctrl.Manager
 	client.Client
-	Scheme         *runtime.Scheme
-	Logger         *slog.Logger
-	Namespace      string
-	HwMgrAdaptor   *adaptors.HwMgrAdaptorController
-	indexerEnabled bool
+	NoncachedClient client.Reader
+	Scheme          *runtime.Scheme
+	Logger          *slog.Logger
+	Namespace       string
+	HwMgrAdaptor    *adaptors.HwMgrAdaptorController
+	indexerEnabled  bool
 }
 
 func (r *NodePoolReconciler) SetupIndexer(ctx context.Context) error {
@@ -72,38 +73,34 @@ func (r *NodePoolReconciler) SetupIndexer(ctx context.Context) error {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
-func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
-	result = utils.DoNotRequeue()
 
+	// Add logging context with the nodepool name
 	ctx = logging.AppendCtx(ctx, slog.String("nodepool", req.Name))
 
 	if !r.indexerEnabled {
-		if err = r.SetupIndexer(ctx); err != nil {
-			err = fmt.Errorf("failed to setup indexer: %w", err)
-			return
+		if err := r.SetupIndexer(ctx); err != nil {
+			return utils.DoNotRequeue(), fmt.Errorf("failed to setup indexer: %w", err)
 		}
 		r.Logger.InfoContext(ctx, "NodePool field indexer initialized")
 		r.indexerEnabled = true
 	}
 
-	// Fetch the nodepool:
+	// Fetch the nodepool, using non-caching client
 	nodepool := &hwmgmtv1alpha1.NodePool{}
-	if err = r.Client.Get(ctx, req.NamespacedName, nodepool); err != nil {
+	if err := utils.GetNodePool(ctx, r.NoncachedClient, req.NamespacedName, nodepool); err != nil {
 		if errors.IsNotFound(err) {
 			// The NodePool has likely been deleted
-			err = nil
-			return
+			return utils.DoNotRequeue(), nil
 		}
-		r.Logger.ErrorContext(
-			ctx,
-			"Unable to fetch NodePool",
-			slog.String("error", err.Error()),
-		)
-		return
+		r.Logger.InfoContext(ctx, "Unable to fetch NodePool. Requeuing", slog.String("error", err.Error()))
+		return utils.RequeueWithShortInterval(), nil
 	}
 
+	// Add logging context with data from the CR
 	ctx = logging.AppendCtx(ctx, slog.String("CloudID", nodepool.Spec.CloudID))
+	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", nodepool.ResourceVersion))
 
 	r.Logger.InfoContext(ctx, "Reconciling NodePool")
 
@@ -111,28 +108,36 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		// Handle deletion
 		r.Logger.InfoContext(ctx, "Nodepool is being deleted")
 		if controllerutil.ContainsFinalizer(nodepool, utils.NodepoolFinalizer) {
-			if err := r.HwMgrAdaptor.HandleNodePoolDeletion(ctx, nodepool); err != nil {
-				// Log the failure and continue, to remove the finalizer and allow the deletion
-				r.Logger.InfoContext(ctx, "Failed HandleNodePoolDeletion", slog.String("error", err.Error()))
+			completed, deleteErr := r.HwMgrAdaptor.HandleNodePoolDeletion(ctx, nodepool)
+			if deleteErr != nil {
+				return utils.RequeueWithShortInterval(), fmt.Errorf("failed HandleNodePoolDeletion: %w", deleteErr)
 			}
 
-			if err := utils.NodepoolRemoveFinalizer(ctx, r.Client, nodepool); err != nil {
-				return utils.RequeueImmediately(), fmt.Errorf("failed to remove finalizer from nodepool: %w", err)
+			if !completed {
+				r.Logger.InfoContext(ctx, "Deletion handling in progress, requeueing")
+				return utils.RequeueWithShortInterval(), nil
 			}
 
+			if finalizerErr := utils.NodepoolRemoveFinalizer(ctx, r.Client, nodepool); finalizerErr != nil {
+				r.Logger.InfoContext(ctx, "Failed to remove finalizer, requeueing", slog.String("error", finalizerErr.Error()))
+				return utils.RequeueWithShortInterval(), nil
+			}
+
+			r.Logger.InfoContext(ctx, "Deletion handling complete, finalizer removed")
 			return utils.DoNotRequeue(), nil
 		}
+
+		r.Logger.InfoContext(ctx, "No finalizer, deletion handling complete")
 		return utils.DoNotRequeue(), nil
 	}
 
 	// Hand off the CR to the adaptor
-	result, err = r.HwMgrAdaptor.HandleNodePool(ctx, nodepool)
+	result, err := r.HwMgrAdaptor.HandleNodePool(ctx, nodepool)
 	if err != nil {
-		err = fmt.Errorf("failed HandleNodePool: %w", err)
-		return
+		return result, fmt.Errorf("failed HandleNodePool: %w", err)
 	}
 
-	return
+	return result, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

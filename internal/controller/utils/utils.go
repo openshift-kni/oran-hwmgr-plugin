@@ -45,7 +45,8 @@ const (
 )
 
 const (
-	JobIdAnnotation = "hwmgr-plugin.oran.openshift.io/jobId"
+	JobIdAnnotation         = "hwmgr-plugin.oran.openshift.io/jobId"
+	DeletionJobIdAnnotation = "hwmgr-plugin.oran.openshift.io/deletionJobId"
 )
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
@@ -240,6 +241,32 @@ func ClearJobId(object client.Object) {
 	annotations := object.GetAnnotations()
 	if annotations != nil {
 		delete(annotations, JobIdAnnotation)
+	}
+}
+
+func GetDeletionJobId(object client.Object) string {
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		return ""
+	}
+
+	return annotations[DeletionJobIdAnnotation]
+}
+
+func SetDeletionJobId(object client.Object, jobId string) {
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	annotations[DeletionJobIdAnnotation] = jobId
+	object.SetAnnotations(annotations)
+}
+
+func ClearDeletionJobId(object client.Object) {
+	annotations := object.GetAnnotations()
+	if annotations != nil {
+		delete(annotations, DeletionJobIdAnnotation)
 	}
 }
 

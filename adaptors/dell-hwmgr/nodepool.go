@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -178,6 +177,9 @@ func (a *Adaptor) HandleNodePoolProcessing(
 		return result, fmt.Errorf("resource group creation failed, jobId=%s: %s", jobId, failReason)
 	case hwmgrclient.JobStatusCompleted:
 		a.Logger.InfoContext(ctx, "Job has completed")
+	case hwmgrclient.JobStatusNotExist:
+		a.Logger.InfoContext(ctx, "Job check returned Not Exist")
+		return result, fmt.Errorf("job does not exist on hardware manager, jobId=%s", jobId)
 	default:
 		a.Logger.InfoContext(ctx, "Resource group check returned unknown status", slog.String("failReason", failReason))
 		return result, fmt.Errorf("failed to check job progress, jobId=%s: %s", jobId, failReason)
@@ -283,51 +285,85 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	return result, nil
 }
 
+// CheckDeletionJobStatus checks the status of the deletion request
+func (a *Adaptor) CheckDeletionJobStatus(ctx context.Context,
+	hwmgrClient *hwmgrclient.HardwareManagerClient,
+	hwmgr *pluginv1alpha1.HardwareManager,
+	nodepool *hwmgmtv1alpha1.NodePool,
+	jobId string) (bool, error) {
+
+	a.Logger.InfoContext(ctx, "Checking deletion job status")
+
+	status, failReason, err := hwmgrClient.CheckJobStatus(ctx, jobId)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "Deletion job progress check failed", slog.String("error", err.Error()))
+		//TODO: This should return false. Returning true for debug testing. Do not merge like this
+		// return false, fmt.Errorf("deletion job progress check failed: %w", err)
+		return true, nil
+	}
+
+	// Process the status response
+	switch status {
+	case hwmgrclient.JobStatusInProgress:
+		a.Logger.InfoContext(ctx, "Deletion job is in progress")
+		return false, nil
+	case hwmgrclient.JobStatusFailed:
+		a.Logger.ErrorContext(ctx, "Deletion job failed", slog.String("failReason", failReason))
+		return false, fmt.Errorf("deletion job failed: failReason=%s", failReason)
+	case hwmgrclient.JobStatusCompleted:
+		a.Logger.InfoContext(ctx, "Deletion job has completed")
+		return true, nil
+	case hwmgrclient.JobStatusNotExist:
+		a.Logger.InfoContext(ctx, "Job no longer exists on hardware manager")
+		return true, nil
+	default:
+		a.Logger.InfoContext(ctx, "Deletion job check returned unknown status", slog.Any("status", status), slog.String("failReason", failReason))
+	}
+	return false, nil
+}
+
 // ReleaseNodePool frees resources allocated to a NodePool
 func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 	hwmgrClient *hwmgrclient.HardwareManagerClient,
 	hwmgr *pluginv1alpha1.HardwareManager,
-	nodepool *hwmgmtv1alpha1.NodePool) error {
+	nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
+
+	// Check for deletion jobId first. If the annotation exists, just check the job status
+	jobId := utils.GetDeletionJobId(nodepool)
+	if jobId != "" {
+		completed, err := a.CheckDeletionJobStatus(ctx, hwmgrClient, hwmgr, nodepool, jobId)
+		if err != nil {
+			return false, fmt.Errorf("failed CheckDeletionJobStatus: %w", err)
+		}
+		return completed, nil
+	}
 
 	a.Logger.InfoContext(ctx, "Processing ReleaseNodePool request")
 
 	// Issue a resource group deletion request to the hardware manager
 	jobId, err := hwmgrClient.DeleteResourceGroup(ctx, nodepool)
 	if err != nil {
-		return fmt.Errorf("failed CreateResourceGroup: %w", err)
+		return false, fmt.Errorf("failed CreateResourceGroup: %w", err)
 	}
 
-	ctx = logging.AppendCtx(ctx, slog.String("jobId", jobId))
+	// Add logging context with deletion jobId
+	ctx = logging.AppendCtx(ctx, slog.String("deletionJobId", jobId))
 
-	// TODO: Can we even requeue the finalizer? If so, we should have a separate annotation for this jobID.
-	// For now, poll until the job finishes
-	maxRetries := 30 // ~2.5 minutes
-	for counter := 0; counter < maxRetries; counter++ {
-		time.Sleep(time.Second * 5)
+	// To account for possible changes to the CR that will impact adding the annotation, get a new copy of the CR
+	refreshedNodepool := &hwmgmtv1alpha1.NodePool{}
+	if err := a.Client.Get(ctx, client.ObjectKeyFromObject(nodepool), refreshedNodepool); err != nil {
+		return false, fmt.Errorf("failed to get updated CR: %w", err)
+	}
+	a.Logger.InfoContext(ctx, "Annotating CR with deletion jobId", slog.String("annotating-ResourceVersion", refreshedNodepool.ResourceVersion))
 
-		status, failReason, err := hwmgrClient.CheckJobStatus(ctx, jobId)
-		if err != nil {
-			a.Logger.InfoContext(ctx, "Deletion job progress check failed", slog.String("error", err.Error()))
-			return fmt.Errorf("deletion job progress check failed: %w", err)
-		}
-
-		// Process the status response
-		switch status {
-		case hwmgrclient.JobStatusInProgress:
-			a.Logger.InfoContext(ctx, "Deletion job is in progress")
-		case hwmgrclient.JobStatusFailed:
-			a.Logger.ErrorContext(ctx, "Deletion job failed", slog.String("failReason", failReason))
-			return fmt.Errorf("deletion job failed: faileReason=%s", failReason)
-		case hwmgrclient.JobStatusCompleted:
-			a.Logger.InfoContext(ctx, "Deletion job has completed")
-			return nil
-		default:
-			a.Logger.InfoContext(ctx, "Deletion job check returned unknown status", slog.Any("status", status), slog.String("failReason", failReason))
-		}
+	// Add the jobId in an annotation
+	utils.SetDeletionJobId(refreshedNodepool, jobId)
+	if err := utils.CreateOrUpdateK8sCR(ctx, a.Client, refreshedNodepool, nil, utils.PATCH); err != nil {
+		return false, fmt.Errorf("failed to annotate nodepool %s: %w", refreshedNodepool.Name, err)
 	}
 
-	a.Logger.InfoContext(ctx, "Deletion job timed out")
-	return fmt.Errorf("deletion job timed out")
+	// Return completed=false so the reconciler requeues to check the job status
+	return false, nil
 }
 
 func (a *Adaptor) handleNodePoolConfiguring(
@@ -380,6 +416,9 @@ func (a *Adaptor) handleNodePoolConfiguring(
 			return result, fmt.Errorf("profile update creation failed, jobId=%s: %s", jobId, failReason)
 		case hwmgrclient.JobStatusCompleted:
 			a.Logger.InfoContext(ctx, "Profile update job has completed")
+		case hwmgrclient.JobStatusNotExist:
+			a.Logger.InfoContext(ctx, "Job check returned Not Exist")
+			return result, fmt.Errorf("job does not exist on hardware manager, jobId=%s", jobId)
 		default:
 			a.Logger.InfoContext(ctx, "Profile update check returned unknown status", slog.String("failReason", failReason))
 			return result, fmt.Errorf("failed to check profile update job progress, jobId=%s: %s", jobId, failReason)

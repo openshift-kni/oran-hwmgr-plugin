@@ -136,21 +136,30 @@ func (a *Adaptor) HandleNodePool(ctx context.Context, hwmgr *pluginv1alpha1.Hard
 	return result, nil
 }
 
-func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) error {
+func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
 	a.Logger.InfoContext(ctx, "Finalizing nodepool")
 
 	hwmgrClient, clientErr := hwmgrclient.NewClientWithResponses(ctx, a.Logger, a.Client, hwmgr)
 	if clientErr != nil {
 		// TODO: Improve client error handling to distinguish between connectivity errors, auth, etc
 		a.Logger.InfoContext(ctx, "NewClientWithResponses error", slog.String("error", clientErr.Error()))
-		return fmt.Errorf("failed to setup hwmgr client: %w", clientErr)
+		return false, fmt.Errorf("failed to setup hwmgr client: %w", clientErr)
 	}
 
-	if err := a.ReleaseNodePool(ctx, hwmgrClient, hwmgr, nodepool); err != nil {
-		return fmt.Errorf("failed to release nodepool %s: %w", nodepool.Name, err)
+	if exists, err := hwmgrClient.ResourceGroupExists(ctx, nodepool); err != nil {
+		return false, fmt.Errorf("resource group existence check failed for cloudID=%s: err: %w", nodepool.Spec.CloudID, err)
+	} else if !exists {
+		// The resource group doesn't exist, so there's nothing to delete
+		a.Logger.InfoContext(ctx, "Resource Group no longer exists on hardware manager")
+		return true, nil
 	}
 
-	return nil
+	completed, err := a.ReleaseNodePool(ctx, hwmgrClient, hwmgr, nodepool)
+	if err != nil {
+		return false, fmt.Errorf("failed to release nodepool %s: %w", nodepool.Name, err)
+	}
+
+	return completed, nil
 }
 
 func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourcePoolInfo, int, error) {

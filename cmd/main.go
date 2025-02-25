@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
 
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
@@ -122,6 +123,11 @@ func _main() int {
 		defaultNamespaces[ns] = cache.Config{}
 	}
 
+	if err := utils.InitNodepoolUtils(scheme); err != nil {
+		setupLog.Error(err, "failed InitNodepoolUtils")
+		return 1
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -167,12 +173,13 @@ func _main() int {
 	}
 
 	if err = (&o2imshardwaremanagementcontroller.NodePoolReconciler{
-		Manager:      mgr,
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		Logger:       slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With("controller", "NodePool"),
-		Namespace:    myNamespace,
-		HwMgrAdaptor: hwmgrAdaptor,
+		Manager:         mgr,
+		Client:          mgr.GetClient(),
+		NoncachedClient: mgr.GetAPIReader(),
+		Scheme:          mgr.GetScheme(),
+		Logger:          slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With("controller", "NodePool"),
+		Namespace:       myNamespace,
+		HwMgrAdaptor:    hwmgrAdaptor,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodePool")
 		return 1
