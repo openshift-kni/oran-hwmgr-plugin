@@ -26,6 +26,9 @@ updates:
     # sigs.k8s.io moved to go 1.23 in v0.20, so ignore major/minor updates until this repo is 1.23-based
     - dependency-name: "sigs.k8s.io/*"
       update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # golang.org/x/oauth2 moved to go 1.23 in 0.27.0, so ignore major/minor updates until this repo is 1.23-based
+    - dependency-name: "golang.org/x/oauth2"
+      update-types: ["version-update:semver-major","version-update:semver-minor"]
   #ignore:
   #  - dependency-name: "*"
   #    update-types: ["version-update:semver-patch"]
