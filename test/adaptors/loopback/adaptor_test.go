@@ -24,7 +24,6 @@ import (
 	hwmgrpluginoranopenshiftiov1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/test/adaptors/assets"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	imsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -35,7 +34,7 @@ var _ = Describe("reconcile via the loopback adaptor", func() {
 		var (
 			cm    *corev1.ConfigMap
 			hwmgr *hwmgrpluginoranopenshiftiov1alpha1.HardwareManager
-			np    *imsv1alpha1.NodePool
+			np    *hwmgmtv1alpha1.NodePool
 		)
 
 		ctx := context.Background()
@@ -74,7 +73,7 @@ var _ = Describe("reconcile via the loopback adaptor", func() {
 			By("reconciling according to the provided manifests")
 
 			// check node has been created
-			node := &imsv1alpha1.Node{}
+			node := &hwmgmtv1alpha1.Node{}
 			timeout, interval := 30, 1
 			Eventually(nodeExists("dummy-sp-64g-0", node), timeout, interval).Should(BeTrue())
 
@@ -126,7 +125,7 @@ func DoAllsecretsHaveNpOwnerRef(uid types.UID) bool {
 }
 
 func DoAllnodesHaveNpOwnerRef(uid types.UID) bool {
-	nodelist := &imsv1alpha1.NodeList{}
+	nodelist := &hwmgmtv1alpha1.NodeList{}
 	if err := k8sClient.List(ctx, nodelist); err != nil {
 		return false
 	}
@@ -149,9 +148,9 @@ func DoAllnodesHaveNpOwnerRef(uid types.UID) bool {
 	return true
 }
 
-func nodeExists(nodeId string, node *imsv1alpha1.Node) func() bool {
+func nodeExists(nodeId string, node *hwmgmtv1alpha1.Node) func() bool {
 	return func() bool {
-		nodelist := &imsv1alpha1.NodeList{}
+		nodelist := &hwmgmtv1alpha1.NodeList{}
 		if err := k8sClient.List(ctx, nodelist); err != nil {
 			return false
 		}
