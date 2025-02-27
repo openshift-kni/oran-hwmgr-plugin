@@ -122,14 +122,14 @@ func (a *Adaptor) HandleNodePool(ctx context.Context, hwmgr *pluginv1alpha1.Hard
 	return result, nil
 }
 
-func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) error {
+func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager, nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
 	a.Logger.InfoContext(ctx, "Finalizing nodepool")
 
 	if err := a.ReleaseNodePool(ctx, hwmgr, nodepool); err != nil {
-		return fmt.Errorf("failed to release nodepool %s: %w", nodepool.Name, err)
+		return false, fmt.Errorf("failed to release nodepool %s: %w", nodepool.Name, err)
 	}
 
-	return nil
+	return true, nil
 }
 
 func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourcePoolInfo, int, error) {

@@ -23,6 +23,8 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -32,6 +34,36 @@ const (
 	NodepoolFinalizer = "oran-hwmgr-plugin/nodepool-finalizer"
 	ResourceTypeIdKey = "resourceTypeId"
 )
+
+var nodepoolGVK schema.GroupVersionKind
+
+func InitNodepoolUtils(scheme *runtime.Scheme) error {
+	nodepool := &hwmgmtv1alpha1.NodePool{}
+	gvks, unversioned, err := scheme.ObjectKinds(nodepool)
+	if err != nil {
+		return fmt.Errorf("failed to query scheme to get GVK for nodepool CR: %w", err)
+	}
+	if unversioned || len(gvks) != 1 {
+		return fmt.Errorf("expected a single versioned item in ObjectKinds response, got %d with unversioned=%t", len(gvks), unversioned)
+	}
+
+	nodepoolGVK = gvks[0]
+
+	return nil
+}
+
+func GetNodePool(ctx context.Context, client client.Reader, key client.ObjectKey, nodepool *hwmgmtv1alpha1.NodePool) error {
+	if err := client.Get(ctx, key, nodepool); err != nil {
+		return fmt.Errorf("failed to get CR: %w", err)
+	}
+
+	if nodepool.Kind == "" {
+		// The non-caching query doesn't set the GVK for the CR, so do it now
+		nodepool.SetGroupVersionKind(nodepoolGVK)
+	}
+
+	return nil
+}
 
 func GetResourceTypeId(nodepool *hwmgmtv1alpha1.NodePool) string {
 	return nodepool.Spec.Extensions[ResourceTypeIdKey]

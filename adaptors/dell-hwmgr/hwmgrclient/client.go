@@ -46,7 +46,43 @@ const (
 	JobStatusCompleted
 	JobStatusFailed
 	JobStatusUnknown
+	JobStatusNotExist
 )
+
+// Helper for decoding failure response from certain APIs
+type RespDefaultDetailsMetadata struct {
+	DTIASErrorCode      string `json:"DTIASErrorCode,omitempty"`
+	DTIASErrorMessage   string `json:"DTIASErrorMessage,omitempty"`
+	HTTPErrorCode       string `json:"HTTPErrorCode,omitempty"`
+	ManagedServiceError string `json:"ManagedServiceError,omitempty"`
+	Resolution          string `json:"Resolution,omitempty"`
+}
+
+type RespDefaultDetails struct {
+	Type     string                     `json:"@type,omitempty"`
+	Reason   string                     `json:"reason,omitempty"`
+	Domain   string                     `json:"domain,omitempty"`
+	Metadata RespDefaultDetailsMetadata `json:"metadata,omitempty"`
+}
+
+type RespDefault struct {
+	Code    int                  `json:"code,omitempty"`
+	Message string               `json:"message,omitempty"`
+	Details []RespDefaultDetails `json:"details,omitempty"`
+}
+
+func DecodeRespDefault(body []byte) (resp RespDefault, err error) {
+	// nolint: wrapcheck
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return
+	}
+
+	if len(resp.Details) == 0 {
+		err = fmt.Errorf("error response had no details: %w", err)
+	}
+
+	return
+}
 
 // HardwareManagerClient provides functions for calling the hardware manager APIs
 type HardwareManagerClient struct {
@@ -332,6 +368,20 @@ func (c *HardwareManagerClient) ResourceGroupFromNodePool(ctx context.Context, n
 	return &rg
 }
 
+func (c *HardwareManagerClient) ResourceGroupExists(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
+	rg := c.ResourceGroupFromNodePool(ctx, nodepool)
+	rgId := *rg.ResourceGroup.Id
+	tenant := c.GetTenant()
+
+	// First check whether the resource group already exists
+	response, err := c.HwmgrClient.GetResourceGroupWithResponse(ctx, tenant, rgId)
+	if err != nil {
+		return false, fmt.Errorf("failed to query for resource group %s: response: %v, err: %w", rgId, response, err)
+	}
+
+	return response.StatusCode() == http.StatusOK, nil
+}
+
 // CreateResourceGroup sends a request to the hardware manager, returns a jobId
 // TODO: Improve error handling for different status codes
 func (c *HardwareManagerClient) CreateResourceGroup(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (string, error) {
@@ -340,19 +390,16 @@ func (c *HardwareManagerClient) CreateResourceGroup(ctx context.Context, nodepoo
 	tenant := c.GetTenant()
 
 	// First check whether the resource group already exists
-	response, err := c.HwmgrClient.GetResourceGroupWithResponse(ctx, tenant, rgId)
-	if err != nil {
-		return "", fmt.Errorf("failed to query for resource group %s: response: %v, err: %w", rgId, response, err)
-	}
-
-	if response.StatusCode() == http.StatusOK {
+	if exists, err := c.ResourceGroupExists(ctx, nodepool); err != nil {
+		return "", fmt.Errorf("resource group existence check failed for %s: err: %w", rgId, err)
+	} else if exists {
 		return "", fmt.Errorf("resource group %s already exists", rgId)
 	}
 
 	// Send a request to the hardware manager to create the resource group
 	rgResponse, err := c.HwmgrClient.CreateResourceGroupWithResponse(ctx, tenant, *rg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create resource group %s, api failure: response: %v, err: %w", rgId, response, err)
+		return "", fmt.Errorf("failed to create resource group %s, api failure: response: %v, err: %w", rgId, rgResponse, err)
 	}
 
 	if rgResponse.StatusCode() != http.StatusOK {
@@ -375,7 +422,22 @@ func (c *HardwareManagerClient) CheckJobStatus(ctx context.Context, jobId string
 	}
 
 	if response.StatusCode() != http.StatusOK {
-		return JobStatusUnknown, failReason, fmt.Errorf("job query failed for %s: %s, body=%s", jobId, *response.JSONDefault.Message, string(response.Body))
+		details, err := DecodeRespDefault(response.Body)
+		if err != nil {
+			return JobStatusUnknown, failReason, fmt.Errorf("failed to decode response, StatusCode=%d: %w", response.StatusCode(), err)
+		}
+
+		if details.Details[0].Metadata.HTTPErrorCode == "404" {
+			// Job no longer exists
+			return JobStatusNotExist, failReason, nil
+		}
+
+		return JobStatusUnknown, failReason,
+			fmt.Errorf("job query failed for %s: Reason='%s', ManagedServiceError='%s', Resolution='%s'",
+				jobId,
+				details.Details[0].Reason,
+				details.Details[0].Metadata.ManagedServiceError,
+				details.Details[0].Metadata.Resolution)
 	}
 
 	status := response.JSON200
@@ -400,7 +462,7 @@ func (c *HardwareManagerClient) CheckJobStatus(ctx context.Context, jobId string
 		} else {
 			failReason = "unknown"
 		}
-		c.Logger.InfoContext(ctx, "Job has failed", slog.Any("status", status), slog.String("failReason", failReason))
+		c.Logger.InfoContext(ctx, "Job has failed", slog.String("message", string(response.Body)), slog.String("failReason", failReason))
 		return JobStatusFailed, failReason, nil
 	default:
 		if status.Brief.FailReason != nil {
@@ -408,7 +470,7 @@ func (c *HardwareManagerClient) CheckJobStatus(ctx context.Context, jobId string
 		} else {
 			failReason = "unknown"
 		}
-		c.Logger.InfoContext(ctx, "Job status is unknown", slog.Any("status", status), slog.String("failReason", failReason))
+		c.Logger.InfoContext(ctx, "Job status is unknown", slog.String("message", string(response.Body)), slog.String("failReason", failReason))
 		return JobStatusUnknown, failReason, nil
 	}
 
