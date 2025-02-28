@@ -54,6 +54,54 @@ rules:
   - patch
   - update
 - apiGroups:
+  - hwmgr-plugin.oran.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hwmgr-plugin.oran.openshift.io
+  resources:
+  - hardwareprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - firmwareschemas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwaresettings
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
   - nodepools

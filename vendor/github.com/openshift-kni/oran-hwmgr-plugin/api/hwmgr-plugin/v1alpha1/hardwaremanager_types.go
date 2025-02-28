@@ -27,9 +27,11 @@ type HardwareManagerAdaptorID string
 var SupportedAdaptors = struct {
 	Loopback HardwareManagerAdaptorID
 	Dell     HardwareManagerAdaptorID
+	Metal3   HardwareManagerAdaptorID
 }{
 	Loopback: "loopback",
 	Dell:     "dell-hwmgr",
+	Metal3:   "metal3",
 }
 
 // ConditionType is a string representing the condition's type

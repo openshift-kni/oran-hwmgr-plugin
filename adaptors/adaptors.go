@@ -39,12 +39,14 @@ import (
 	// Import the adaptors
 	dellhwmgr "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/dell-hwmgr"
 	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/loopback"
+	metal3 "github.com/openshift-kni/oran-hwmgr-plugin/adaptors/metal3"
 )
 
 // Supported adaptor IDs
 const (
 	LoopbackAdaptorID  = "loopback"
 	DellHwMgrAdaptorID = "dell-hwmgr"
+	Metal3AdaptorID    = "metal3"
 )
 
 // HwMgrAdaptorController
@@ -61,6 +63,7 @@ func (c *HwMgrAdaptorController) SetupWithManager(mgr ctrl.Manager) error {
 	c.adaptors = make(map[string]adaptorinterface.HwMgrAdaptorIntf)
 	c.adaptors[LoopbackAdaptorID] = loopback.NewAdaptor(c.Client, c.Scheme, c.Logger, c.Namespace)
 	c.adaptors[DellHwMgrAdaptorID] = dellhwmgr.NewAdaptor(c.Client, c.Scheme, c.Logger, c.Namespace)
+	c.adaptors[Metal3AdaptorID] = metal3.NewAdaptor(c.Client, c.Scheme, c.Logger, c.Namespace)
 
 	for id, adaptor := range c.adaptors {
 		if err := adaptor.SetupAdaptor(mgr); err != nil {
@@ -93,6 +96,8 @@ func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, hwMgrId string) (
 		if hwmgr.Spec.DellData == nil {
 			return nil, http.StatusServiceUnavailable, fmt.Errorf("required config data missing from HardwareManager: name=%s", hwmgr.Name)
 		}
+	case pluginv1alpha1.SupportedAdaptors.Metal3:
+		c.Logger.InfoContext(ctx, "HardwareManager", slog.String("name", hwmgr.Name))
 	default:
 		return nil, http.StatusServiceUnavailable, fmt.Errorf("unsupported adaptorId (%s) HardwareManager: name=%s", hwmgr.Spec.AdaptorID, hwmgr.Name)
 	}

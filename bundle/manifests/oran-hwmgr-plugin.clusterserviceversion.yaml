@@ -96,6 +96,37 @@ spec:
         displayName: Resource Pools
         path: resourcePools
       version: v1alpha1
+    - description: HardwareProfile is the Schema for the hardwareprofiles API
+      displayName: Hardware Profile
+      kind: HardwareProfile
+      name: hardwareprofiles.hwmgr-plugin.oran.openshift.io
+      resources:
+      - kind: Service
+        name: policy-engine-service
+        version: v1
+      specDescriptors:
+      - description: Bios defines a set of bios attributes
+        displayName: Bios
+        path: bios
+      - displayName: Attributes
+        path: bios.attributes
+      - description: BiosVersion is the desired firmware version of BIOS
+        displayName: BIOS Version
+        path: biosVersion
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: BmcVersion is the desired firmware version of BMC
+        displayName: BMC Version
+        path: bmcVersion
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Represents the observations of a HardwareProfile's current state
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
+      version: v1alpha1
   description: O-Cloud Hardware Manager Plugin
   displayName: O-Cloud Hardware Manager Plugin
   icon:
@@ -154,6 +185,54 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - hwmgr-plugin.oran.openshift.io
+          resources:
+          - hardwareprofiles
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - hwmgr-plugin.oran.openshift.io
+          resources:
+          - hardwareprofiles/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - metal3.io
+          resources:
+          - baremetalhosts
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - firmwareschemas
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - hostfirmwaresettings
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
