@@ -30,15 +30,12 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/util/net"
 
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 )
-
-var utilsLog = slog.New(logging.NewLoggingContextHandler(slog.LevelDebug)).With("module", "utils")
 
 // OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
 // from an OAuth capable authorization server.

@@ -64,7 +64,7 @@ func (c *HwMgrAdaptorController) SetupWithManager(mgr ctrl.Manager) error {
 
 	for id, adaptor := range c.adaptors {
 		if err := adaptor.SetupAdaptor(mgr); err != nil {
-			c.Logger.Error("failed to setup adaptor", "id", id, "error", err)
+			c.Logger.Error("failed to setup adaptor", slog.String("id", id), slog.String("error", err.Error()))
 		}
 	}
 
@@ -87,7 +87,7 @@ func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, hwMgrId string) (
 	case pluginv1alpha1.SupportedAdaptors.Loopback:
 		if hwmgr.Spec.LoopbackData == nil {
 			// Configuration data is not currently mandatory for the loopback adaptor, so just log it
-			c.Logger.DebugContext(ctx, "config data missing from HardwareManager", "name", hwmgr.Name)
+			c.Logger.DebugContext(ctx, "config data missing from HardwareManager", slog.String("name", hwmgr.Name))
 		}
 	case pluginv1alpha1.SupportedAdaptors.Dell:
 		if hwmgr.Spec.DellData == nil {
@@ -105,7 +105,7 @@ func (c *HwMgrAdaptorController) HandleNodePool(ctx context.Context, nodepool *h
 	ctx = logging.AppendCtx(ctx, slog.String("hwmgr", nodepool.Spec.HwMgrId))
 	hwmgr, _, err := c.getHwMgr(ctx, nodepool.Spec.HwMgrId)
 	if err != nil {
-		c.Logger.Error("failed to get adaptor instance", slog.String("error", err.Error()))
+		c.Logger.ErrorContext(ctx, "failed to get adaptor instance", slog.String("error", err.Error()))
 
 		if err := utils.UpdateNodePoolStatusCondition(ctx, c.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
@@ -122,7 +122,7 @@ func (c *HwMgrAdaptorController) HandleNodePool(ctx context.Context, nodepool *h
 	// Validate the specified adaptor ID
 	adaptor, exists := c.adaptors[adaptorID]
 	if !exists {
-		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
+		c.Logger.ErrorContext(ctx, "unsupported adaptor ID", slog.String("adaptorID", adaptorID))
 
 		if err := utils.UpdateNodePoolStatusCondition(ctx, c.Client, nodepool,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
@@ -161,7 +161,7 @@ func (c *HwMgrAdaptorController) HandleNodePoolDeletion(ctx context.Context, nod
 	// Validate the specified adaptor ID
 	adaptor, exists := c.adaptors[adaptorID]
 	if !exists {
-		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
+		c.Logger.ErrorContext(ctx, "unsupported adaptor ID", slog.String("adaptorID", adaptorID))
 		return true, nil
 	}
 
@@ -197,7 +197,7 @@ func (c *HwMgrAdaptorController) GetResourcePools(ctx context.Context, request i
 	adaptor, exists := c.adaptors[adaptorID]
 	if !exists {
 		// We should never get here, as the adaptor ID is validated in getHwMgr
-		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
+		c.Logger.ErrorContext(ctx, "unsupported adaptor ID", slog.String("adaptorID", adaptorID))
 		return invserver.GetResourcePools500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
 			Status: statusCode,
 			Detail: fmt.Sprintf("Hardware Manager %s specifies invalid adaptorId: %s", request.HwMgrId, adaptorID),
@@ -206,7 +206,7 @@ func (c *HwMgrAdaptorController) GetResourcePools(ctx context.Context, request i
 
 	resp, statusCode, err := adaptor.GetResourcePools(ctx, hwmgr)
 	if err != nil {
-		c.Logger.Error("unable to get resource pools from hardware manager", "hwMgrId", request.HwMgrId, "error", err)
+		c.Logger.ErrorContext(ctx, "unable to get resource pools from hardware manager", slog.String("hwMgrId", request.HwMgrId), slog.String("error", err.Error()))
 		return invserver.GetResourcePools500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
 			Status: statusCode,
 			Detail: fmt.Sprintf("Resource Pool query failed for %s: %s", request.HwMgrId, err.Error()),
@@ -240,7 +240,7 @@ func (c *HwMgrAdaptorController) GetResources(ctx context.Context, request invse
 	adaptor, exists := c.adaptors[adaptorID]
 	if !exists {
 		// We should never get here, as the adaptor ID is validated in getHwMgr
-		c.Logger.Error("unsupported adaptor ID", "adaptorID", adaptorID)
+		c.Logger.ErrorContext(ctx, "unsupported adaptor ID", slog.String("adaptorID", adaptorID))
 		return invserver.GetResources500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
 			Status: statusCode,
 			Detail: fmt.Sprintf("Hardware Manager %s specifies invalid adaptorId: %s", request.HwMgrId, adaptorID),
@@ -249,7 +249,7 @@ func (c *HwMgrAdaptorController) GetResources(ctx context.Context, request invse
 
 	resp, statusCode, err := adaptor.GetResources(ctx, hwmgr)
 	if err != nil {
-		c.Logger.Error("unable to get resources from hardware manager", "hwMgrId", request.HwMgrId, "error", err)
+		c.Logger.ErrorContext(ctx, "unable to get resources from hardware manager", slog.String("hwMgrId", request.HwMgrId), slog.String("error", err.Error()))
 		return invserver.GetResources500ApplicationProblemPlusJSONResponse(invserver.ProblemDetails{
 			Status: statusCode,
 			Detail: fmt.Sprintf("Resource query failed for %s: %s", request.HwMgrId, err.Error()),

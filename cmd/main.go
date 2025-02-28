@@ -164,7 +164,7 @@ func _main() int {
 	hwmgrAdaptor := &adaptors.HwMgrAdaptorController{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
-		Logger:    slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With("controller", "adaptors"),
+		Logger:    slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "adaptors")),
 		Namespace: myNamespace,
 	}
 	if err = hwmgrAdaptor.SetupWithManager(mgr); err != nil {
@@ -177,7 +177,7 @@ func _main() int {
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With("controller", "NodePool"),
+		Logger:          slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "NodePool")),
 		Namespace:       myNamespace,
 		HwMgrAdaptor:    hwmgrAdaptor,
 	}).SetupWithManager(mgr); err != nil {

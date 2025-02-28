@@ -93,7 +93,7 @@ func (r *HardwareManagerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return
 	}
 
-	r.Logger.InfoContext(ctx, "[Loopback HardwareManager]", "loopbackData", hwmgr.Spec.LoopbackData)
+	r.Logger.InfoContext(ctx, "[Loopback HardwareManager]", slog.Any("loopbackData", hwmgr.Spec.LoopbackData))
 
 	return
 }

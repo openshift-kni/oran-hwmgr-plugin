@@ -25,7 +25,7 @@ const (
 
 // RunServer starts the API server and blocks until it terminates or context is canceled.
 func RunServer(ctx context.Context, address string, hwMgrAdaptor *adaptors.HwMgrAdaptorController) error {
-	slog.Info("Starting inventory API server")
+	slog.InfoContext(ctx, "Starting inventory API server")
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -35,7 +35,7 @@ func RunServer(ctx context.Context, address string, hwMgrAdaptor *adaptors.HwMgr
 
 	go func() {
 		sig := <-shutdown
-		slog.Info("Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", slog.String("signal", sig.String()))
 		cancel()
 	}()
 
@@ -99,7 +99,7 @@ func RunServer(ctx context.Context, address string, hwMgrAdaptor *adaptors.HwMgr
 		// Cancel the context in case it wasn't already canceled
 		cancel()
 		// Shutdown the http server
-		slog.Info("Shutting down inventory API server")
+		slog.InfoContext(ctx, "Shutting down inventory API server")
 		if err := GracefulShutdown(srv); err != nil {
 			slog.Error("error shutting down inventory API server", "error", err)
 		}
@@ -110,7 +110,7 @@ func RunServer(ctx context.Context, address string, hwMgrAdaptor *adaptors.HwMgr
 	case err := <-serverErrors:
 		return fmt.Errorf("error starting inventory API server: %w", err)
 	case <-ctx.Done():
-		slog.Info("Inventory API server shutting down")
+		slog.InfoContext(ctx, "Inventory API server shutting down")
 	}
 
 	return nil

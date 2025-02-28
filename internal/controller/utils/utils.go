@@ -19,10 +19,12 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
 	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
 
 	corev1 "k8s.io/api/core/v1"
@@ -37,6 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 )
+
+var utilsLog = slog.New(logging.NewLoggingContextHandler(slog.LevelDebug)).With(slog.String("module", "utils"))
 
 // Resource operations
 const (

@@ -49,7 +49,7 @@ func NewAdaptor(client client.Client, scheme *runtime.Scheme, logger *slog.Logge
 	return &Adaptor{
 		Client:    client,
 		Scheme:    scheme,
-		Logger:    logger.With("adaptor", "dell-hwmgr"),
+		Logger:    logger.With(slog.String("adaptor", "dell-hwmgr")),
 		Namespace: namespace,
 	}
 }

@@ -94,7 +94,7 @@ func (r *HardwareManagerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			err = fmt.Errorf("failed to update status for hardware manager (%s) with validation failure: %w", hwmgr.Name, updateErr)
 			return
 		}
-		r.Logger.Error("HardwareManager CR missing dellData configuration field", slog.String("name", hwmgr.Name))
+		r.Logger.ErrorContext(ctx, "HardwareManager CR missing dellData configuration field", slog.String("name", hwmgr.Name))
 		return
 	}
 
@@ -113,7 +113,7 @@ func (r *HardwareManagerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			err = fmt.Errorf("failed to update status for hardware manager (%s) with authentication failure: %w", hwmgr.Name, updateErr)
 			return
 		}
-		r.Logger.Error("Failed to establish connection to hardware manager", slog.String("name", hwmgr.Name), slog.String("error", clientErr.Error()))
+		r.Logger.ErrorContext(ctx, "Failed to establish connection to hardware manager", slog.String("name", hwmgr.Name), slog.String("error", clientErr.Error()))
 		return
 	}
 
@@ -128,7 +128,7 @@ func (r *HardwareManagerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			err = fmt.Errorf("failed to update status for hardware manager (%s) with authentication failure: %w", hwmgr.Name, updateErr)
 			return
 		}
-		r.Logger.Error("Failed to query resource pools", slog.String("name", hwmgr.Name), slog.String("error", clientErr.Error()))
+		r.Logger.ErrorContext(ctx, "Failed to query resource pools", slog.String("name", hwmgr.Name), slog.String("error", clientErr.Error()))
 		return
 	}
 

@@ -74,7 +74,7 @@ func (a *Adaptor) HandleNodePoolCreate(
 	var message string
 
 	if err := a.ProcessNewNodePool(ctx, hwmgr, nodepool); err != nil {
-		a.Logger.Error("failed createNodePool", "err", err)
+		a.Logger.InfoContext(ctx, "failed ProcessNewNodePool", slog.String("err", err.Error()))
 		conditionReason = hwmgmtv1alpha1.Failed
 		conditionStatus = metav1.ConditionFalse
 		message = "Creation request failed: " + err.Error()
