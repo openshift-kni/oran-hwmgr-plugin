@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors"
 	o2imshardwaremanagement "github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/o2ims-hardwaremanagement"
+	controllerutils "github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	"github.com/openshift-kni/oran-hwmgr-plugin/test/adaptors/assets"
 	"github.com/openshift-kni/oran-hwmgr-plugin/test/adaptors/crds"
 	"github.com/openshift-kni/oran-hwmgr-plugin/test/utils"
@@ -121,6 +122,9 @@ var _ = BeforeSuite(func() {
 	mgr, err = manager.New(cfg, manager.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 
+	err = controllerutils.InitNodepoolUtils(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// build the adaptor controller
 	hwmgrAdaptor := &adaptors.HwMgrAdaptorController{
 		Client:    mgr.GetClient(),
@@ -134,12 +138,13 @@ var _ = BeforeSuite(func() {
 
 	// build the hardware manager reconciler
 	nodepoolReconciler := o2imshardwaremanagement.NodePoolReconciler{
-		Manager:      mgr,
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		Logger:       logger,
-		Namespace:    "default",
-		HwMgrAdaptor: hwmgrAdaptor,
+		Manager:         mgr,
+		Client:          mgr.GetClient(),
+		NoncachedClient: mgr.GetAPIReader(),
+		Scheme:          mgr.GetScheme(),
+		Logger:          logger,
+		Namespace:       "default",
+		HwMgrAdaptor:    hwmgrAdaptor,
 	}
 	err = nodepoolReconciler.SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())

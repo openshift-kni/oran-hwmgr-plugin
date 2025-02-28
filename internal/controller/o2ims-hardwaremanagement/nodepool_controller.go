@@ -38,11 +38,12 @@ import (
 type NodePoolReconciler struct {
 	ctrl.Manager
 	client.Client
-	Scheme         *runtime.Scheme
-	Logger         *slog.Logger
-	Namespace      string
-	HwMgrAdaptor   *adaptors.HwMgrAdaptorController
-	indexerEnabled bool
+	NoncachedClient client.Reader
+	Scheme          *runtime.Scheme
+	Logger          *slog.Logger
+	Namespace       string
+	HwMgrAdaptor    *adaptors.HwMgrAdaptorController
+	indexerEnabled  bool
 }
 
 func (r *NodePoolReconciler) SetupIndexer(ctx context.Context) error {
@@ -89,7 +90,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 	// Fetch the nodepool:
 	nodepool := &hwmgmtv1alpha1.NodePool{}
-	if err = r.Client.Get(ctx, req.NamespacedName, nodepool); err != nil {
+	if err = utils.GetNodePool(ctx, r.NoncachedClient, req.NamespacedName, nodepool); err != nil {
 		if errors.IsNotFound(err) {
 			// The NodePool has likely been deleted
 			err = nil
