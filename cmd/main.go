@@ -204,7 +204,7 @@ func _main() int {
 	defer cancel()
 	go func() {
 		setupLog.Info("starting API server")
-		err = server.RunServer(ctx, apiServerAddr, hwmgrAdaptor)
+		err = server.RunServer(ctx, apiServerAddr, tlsCertDir, hwmgrAdaptor)
 		if err != nil {
 			setupLog.Error(err, "unable to start API server")
 			serverErrors <- err

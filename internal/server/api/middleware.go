@@ -1,4 +1,4 @@
-package server
+package api
 
 import (
 	"context"
@@ -17,13 +17,26 @@ import (
 
 type Middleware = func(http.Handler) http.Handler
 
+type durationLogger struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (d *durationLogger) WriteHeader(statusCode int) {
+	d.statusCode = statusCode
+	d.ResponseWriter.WriteHeader(statusCode)
+}
+
 // GetLogDurationFunc log time taken to complete a request.
 func GetLogDurationFunc() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			startTime := time.Now()
-			next.ServeHTTP(w, r)
-			slog.Debug(fmt.Sprintf("%s took %s", r.RequestURI, time.Since(startTime)))
+			d := durationLogger{
+				ResponseWriter: w,
+			}
+			next.ServeHTTP(&d, r)
+			slog.Debug("Request completed", "method", r.Method, "url", r.RequestURI, "status", d.statusCode, "duration", time.Since(startTime).String())
 		})
 	}
 }
@@ -42,11 +55,15 @@ func GetOpenAPIValidationFunc(swagger *openapi3.T) Middleware {
 	})
 }
 
-// problemDetails writes an error message using the appropriate header for an ORAN error response
-func problemDetails(w http.ResponseWriter, body string, code int) {
+// ProblemDetails writes an error message using the appropriate header for an ORAN error response
+func ProblemDetails(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(code)
-	_, err := fmt.Fprintln(w, body)
+	body, _ := json.Marshal(generated.ProblemDetails{
+		Detail: message,
+		Status: code,
+	})
+	_, err := fmt.Fprintln(w, string(body))
 	if err != nil {
 		panic(err)
 	}
@@ -55,11 +72,7 @@ func problemDetails(w http.ResponseWriter, body string, code int) {
 // getErrorHandlerFunc override default validation error to allow for O-RAN specific error
 func getErrorHandlerFunc() func(w http.ResponseWriter, message string, statusCode int) {
 	return func(w http.ResponseWriter, message string, statusCode int) {
-		out, _ := json.Marshal(generated.ProblemDetails{
-			Detail: message,
-			Status: statusCode,
-		})
-		problemDetails(w, string(out), statusCode)
+		ProblemDetails(w, message, statusCode)
 	}
 }
 
@@ -81,22 +94,14 @@ func GracefulShutdown(srv *http.Server) error {
 // GetRequestErrorFunc override default validation errors to allow for O-RAN specific struct
 func GetRequestErrorFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		out, _ := json.Marshal(generated.ProblemDetails{
-			Detail: err.Error(),
-			Status: http.StatusBadRequest,
-		})
-		problemDetails(w, string(out), http.StatusBadRequest)
+		ProblemDetails(w, err.Error(), http.StatusBadRequest)
 	}
 }
 
 // GetResponseErrorFunc override default internal server error to allow for O-RAN specific struct
 func GetResponseErrorFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		out, _ := json.Marshal(generated.ProblemDetails{
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		})
-		problemDetails(w, string(out), http.StatusInternalServerError)
+		ProblemDetails(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -104,10 +109,6 @@ func GetResponseErrorFunc() func(w http.ResponseWriter, r *http.Request, err err
 // the required JSON body.
 func GetNotFoundFunc() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		out, _ := json.Marshal(generated.ProblemDetails{
-			Detail: fmt.Sprintf("Path '%s' not found", r.RequestURI),
-			Status: http.StatusNotFound,
-		})
-		problemDetails(w, string(out), http.StatusNotFound)
+		ProblemDetails(w, fmt.Sprintf("Path '%s' not found", r.RequestURI), http.StatusNotFound)
 	}
 }
