@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: controller-manager-tls
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: service
+    app.kubernetes.io/instance: controller-manager
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/created-by: oran-hwmgr-plugin
+    app.kubernetes.io/part-of: oran-hwmgr-plugin
+    app.kubernetes.io/managed-by: kustomize
+  name: controller-manager
+  namespace: system
+spec:
+  ports:
+  - name: metrics
+    port: 8443
+    protocol: TCP
+    targetPort: metrics
+  - name: api
+    port: 6443
+    protocol: TCP
+    targetPort: api
+  selector:
+    control-plane: controller-manager

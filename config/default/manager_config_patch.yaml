@@ -8,3 +8,27 @@ spec:
     spec:
       containers:
       - name: manager
+        args:
+        - "--health-probe-bind-address=:8081"
+        - "--metrics-bind-address=:8443"
+        - "--tls-cert-dir=/secrets/tls"
+        - "--api-bind-address=:6443"
+        - "--leader-elect"
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+          name: metrics
+        - containerPort: 8081
+          protocol: TCP
+          name: probes
+        - containerPort: 6443
+          protocol: TCP
+          name: api
+        volumeMounts:
+        - mountPath: /secrets/tls
+          name: controller-manager-tls
+      volumes:
+      - name: controller-manager-tls
+        secret:
+          defaultMode: 256
+          secretName: controller-manager-tls

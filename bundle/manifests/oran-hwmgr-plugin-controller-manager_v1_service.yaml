@@ -5,7 +5,7 @@ metadata:
     service.beta.openshift.io/serving-cert-secret-name: controller-manager-tls
   creationTimestamp: null
   labels:
-    app.kubernetes.io/component: kube-rbac-proxy
+    app.kubernetes.io/component: controller-manager
     app.kubernetes.io/created-by: oran-hwmgr-plugin
     app.kubernetes.io/instance: controller-manager
     app.kubernetes.io/managed-by: kustomize
@@ -15,14 +15,14 @@ metadata:
   name: oran-hwmgr-plugin-controller-manager
 spec:
   ports:
-  - name: https-metrics
+  - name: metrics
     port: 8443
     protocol: TCP
-    targetPort: https-metrics
-  - name: https-api
+    targetPort: metrics
+  - name: api
     port: 6443
     protocol: TCP
-    targetPort: https-api
+    targetPort: api
   selector:
     control-plane: controller-manager
 status:

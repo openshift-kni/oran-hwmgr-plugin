@@ -204,18 +204,6 @@ spec:
           - get
           - patch
           - update
-        - apiGroups:
-          - authentication.k8s.io
-          resources:
-          - tokenreviews
-          verbs:
-          - create
-        - apiGroups:
-          - authorization.k8s.io
-          resources:
-          - subjectaccessreviews
-          verbs:
-          - create
         serviceAccountName: oran-hwmgr-plugin-controller-manager
       deployments:
       - label:
@@ -242,61 +230,10 @@ spec:
             spec:
               containers:
               - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --http2-disable=true
-                - --v=0
-                image: quay.io/openshift/origin-kube-rbac-proxy:4.18
-                name: metrics-proxy
-                ports:
-                - containerPort: 8443
-                  name: https-metrics
-                  protocol: TCP
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 5m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-              - args:
-                - --secure-listen-address=0.0.0.0:6443
-                - --upstream=http://127.0.0.1:8082/
-                - --tls-cert-file=/secrets/tls/tls.crt
-                - --tls-private-key-file=/secrets/tls/tls.key
-                - --tls-min-version=VersionTLS12
-                - --http2-disable=true
-                - --v=0
-                image: quay.io/openshift/origin-kube-rbac-proxy:4.18
-                name: api-proxy
-                ports:
-                - containerPort: 6443
-                  name: https-api
-                  protocol: TCP
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 5m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-                volumeMounts:
-                - mountPath: /secrets/tls
-                  name: controller-manager-tls
-              - args:
                 - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
-                - --api-bind-address=127.0.0.1:8082
+                - --metrics-bind-address=:8443
+                - --tls-cert-dir=/secrets/tls
+                - --api-bind-address=:6443
                 - --leader-elect
                 command:
                 - /manager
@@ -319,13 +256,13 @@ spec:
                   periodSeconds: 20
                 name: manager
                 ports:
-                - containerPort: 8080
+                - containerPort: 8443
                   name: metrics
                   protocol: TCP
                 - containerPort: 8081
                   name: probes
                   protocol: TCP
-                - containerPort: 8082
+                - containerPort: 6443
                   name: api
                   protocol: TCP
                 readinessProbe:
@@ -343,6 +280,9 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                volumeMounts:
+                - mountPath: /secrets/tls
+                  name: controller-manager-tls
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: oran-hwmgr-plugin-controller-manager
