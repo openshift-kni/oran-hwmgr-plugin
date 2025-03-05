@@ -33,6 +33,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 )
@@ -120,6 +121,29 @@ func GetDefaultTLSConfig(config *tls.Config, insecureSkipTLSVerify bool) (*tls.C
 	}
 
 	return config, nil
+}
+
+// GetServerTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
+	loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-server", certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
+	}
+	go loader.Run(ctx, 1)
+
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			certBytes, keyBytes := loader.CurrentCertKeyContent()
+			cert, err := tls.X509KeyPair(certBytes, keyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create server certificate: %w", err)
+			}
+			return &cert, nil
+		},
+	}
+
+	return tlsConfig, nil
 }
 
 // GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
