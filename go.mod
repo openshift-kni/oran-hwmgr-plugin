@@ -1,8 +1,7 @@
 module github.com/openshift-kni/oran-hwmgr-plugin
 
 go 1.22.5
-
-toolchain go1.22.7
+toolchain go1.23.7
 
 require (
 	github.com/getkin/kin-openapi v0.129.0
@@ -20,7 +19,7 @@ require (
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
 	github.com/samber/lo v1.49.1
 	github.com/sethvargo/go-retry v0.3.0
-	golang.org/x/mod v0.23.0
+	golang.org/x/mod v0.24.0
 	golang.org/x/oauth2 v0.26.0
 	k8s.io/api v0.31.6
 	k8s.io/apimachinery v0.31.6
