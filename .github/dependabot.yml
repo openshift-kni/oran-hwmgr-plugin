@@ -32,6 +32,9 @@ updates:
     # github.com/go-git/go-git/v5 moved to go 1.23 in 5.14.0, so ignore major/minor updates until this repo is 1.23-based
     - dependency-name: "github.com/go-git/go-git/v5"
       update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # golang.org/x/mod moved to go 1.23 in 0.24.0, so ignore major/minor updates until this repo is 1.23-based
+    - dependency-name: "golang.org/x/mod"
+      update-types: ["version-update:semver-major","version-update:semver-minor"]
   #ignore:
   #  - dependency-name: "*"
   #    update-types: ["version-update:semver-patch"]
