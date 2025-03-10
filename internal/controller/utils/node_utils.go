@@ -23,6 +23,8 @@ import (
 
 	"github.com/google/uuid"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -105,6 +107,20 @@ func FindNextNodeToUpdate(nodelist *hwmgmtv1alpha1.NodeList, groupname, newHwPro
 	for _, node := range nodelist.Items {
 		if groupname == node.Spec.GroupName && newHwProfile != node.Spec.HwProfile {
 			return &node
+		}
+	}
+
+	return nil
+}
+
+// FindNodeInProgress scans the nodelist to find the first node in InProgress
+func FindNodeInProgress(nodelist *hwmgmtv1alpha1.NodeList) *hwmgmtv1alpha1.Node {
+	for _, node := range nodelist.Items {
+		condition := meta.FindStatusCondition(node.Status.Conditions, (string(hwmgmtv1alpha1.Provisioned)))
+		if condition != nil {
+			if condition.Status == metav1.ConditionFalse && condition.Reason == string(hwmgmtv1alpha1.InProgress) {
+				return &node
+			}
 		}
 	}
 

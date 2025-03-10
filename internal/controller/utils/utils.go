@@ -51,6 +51,7 @@ const (
 const (
 	JobIdAnnotation         = "hwmgr-plugin.oran.openshift.io/jobId"
 	DeletionJobIdAnnotation = "hwmgr-plugin.oran.openshift.io/deletionJobId"
+	BiosAnnotation          = "hwmgr-plugin.oran.openshift.io/bios-config"
 )
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
@@ -272,6 +273,30 @@ func ClearDeletionJobId(object client.Object) {
 	if annotations != nil {
 		delete(annotations, DeletionJobIdAnnotation)
 	}
+}
+
+func GetBiosConfig(object client.Object) string {
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		return ""
+	}
+
+	return annotations[BiosAnnotation]
+}
+
+func SetBiosConfig(object client.Object, name string) {
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	annotations[BiosAnnotation] = name
+	object.SetAnnotations(annotations)
+}
+
+func RemoveBiosConfig(object client.Object) {
+	annotations := object.GetAnnotations()
+	delete(annotations, BiosAnnotation)
 }
 
 //

@@ -52,6 +52,7 @@ import (
 
 	//+kubebuilder:scaffold:imports
 
+	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
@@ -64,6 +65,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(pluginv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(bmhv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -143,9 +145,10 @@ func _main() int {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "d5b3dd42.oran.openshift.io",
 
-		Cache: cache.Options{
-			DefaultNamespaces: defaultNamespaces,
-		},
+		// we need to watching all namespaces
+		// Cache: cache.Options{
+		//	 DefaultNamespaces: defaultNamespaces,
+		// },
 
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
