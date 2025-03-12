@@ -66,6 +66,7 @@ spec:
                 enum:
                 - loopback
                 - dell-hwmgr
+                - metal3
                 type: string
               dellData:
                 description: Config data for an instance of the dell-hwmgr adaptor

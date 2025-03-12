@@ -111,7 +111,7 @@ type HardwareManagerSpec struct {
 
 	// The adaptor ID
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=loopback;dell-hwmgr
+	// +kubebuilder:validation:Enum=loopback;dell-hwmgr;metal3
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	AdaptorID HardwareManagerAdaptorID `json:"adaptorId"`
 
