@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # dell-hwmgr
 
 The Dell Hardware Manager Adaptor for O-Cloud Hardware Manager Plugin provides the interactions between the O-Cloud

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # loopback-adaptor
 
 The Loopback Adaptor for the O-Cloud Hardware Manager Plugin provides a test mechanism to mock the interactions between

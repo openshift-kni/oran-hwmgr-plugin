@@ -1,6 +1,12 @@
 //go:build tools
 // +build tools
 
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package inventory_client
 
 import (

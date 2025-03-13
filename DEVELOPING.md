@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Typed Errors
 
 The errors defined in `typed_errors.go` provide new types for a more granular error management so the business logic can address specific errors if they are defined using those types.

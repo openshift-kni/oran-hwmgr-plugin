@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # oran-hwmgr-plugin
 
 O-Cloud Hardware Manager Plugin

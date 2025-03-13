@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Testing adaptors
 
 The `dell-hwmgr` and `loopback` adaptors are tested via the corresponding `Gingko` test suites under this directory leveraging `Envtest`. No cluster is needed to run these test suites.
