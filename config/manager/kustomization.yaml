@@ -8,7 +8,7 @@ resources:
 images:
 - name: controller
   newName: quay.io/openshift-kni/oran-hwmgr-plugin
-  newTag: 4.18.0
+  newTag: 4.18.0-poc.2503.0
 
 replacements:
 - source:
