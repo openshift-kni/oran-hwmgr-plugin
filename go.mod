@@ -1,8 +1,7 @@
 module github.com/openshift-kni/oran-hwmgr-plugin
 
 go 1.22.5
-
-toolchain go1.22.7
+toolchain go1.24.1
 
 require (
 	github.com/getkin/kin-openapi v0.130.0
@@ -10,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/integralist/go-findroot v0.0.0-20160518114804-ac90681525dc
-	github.com/metal3-io/baremetal-operator/apis v0.9.0
+	github.com/metal3-io/baremetal-operator/apis v0.9.1
 	github.com/oapi-codegen/nethttp-middleware v1.0.2
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.1
@@ -22,7 +21,7 @@ require (
 	github.com/samber/lo v1.49.1
 	github.com/sethvargo/go-retry v0.3.0
 	golang.org/x/mod v0.23.0
-	golang.org/x/oauth2 v0.26.0
+	golang.org/x/oauth2 v0.27.0
 	k8s.io/api v0.31.7
 	k8s.io/apimachinery v0.31.7
 	k8s.io/apiserver v0.31.7
@@ -110,13 +109,13 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/term v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
