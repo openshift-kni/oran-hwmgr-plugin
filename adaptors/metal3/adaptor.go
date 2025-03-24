@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/adaptors/metal3/controller"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
@@ -127,16 +128,51 @@ func (a *Adaptor) HandleNodePoolDeletion(ctx context.Context, hwmgr *pluginv1alp
 	return true, nil
 }
 
-// TODO: Implementation needed
 func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourcePoolInfo, int, error) {
 	var resp []invserver.ResourcePoolInfo
+
+	var bmhList metal3v1alpha1.BareMetalHostList
+	var opts []client.ListOption
+
+	if err := a.Client.List(ctx, &bmhList, opts...); err != nil {
+		return resp, http.StatusInternalServerError, fmt.Errorf("failed to get bmh list: %w", err)
+	}
+
+	pools := make(map[string]string)
+
+	for _, bmh := range bmhList.Items {
+		if includeInInventory(bmh) {
+			pools[bmh.Labels[LabelSiteID]] = bmh.Labels[LabelResourcePoolID]
+		}
+	}
+
+	for siteId, poolID := range pools {
+		resp = append(resp, invserver.ResourcePoolInfo{
+			ResourcePoolId: poolID,
+			Description:    poolID,
+			Name:           poolID,
+			SiteId:         &siteId,
+		})
+	}
 
 	return resp, http.StatusOK, nil
 }
 
-// TODO: Implementation needed
 func (a *Adaptor) GetResources(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourceInfo, int, error) {
 	var resp []invserver.ResourceInfo
+
+	var bmhList metal3v1alpha1.BareMetalHostList
+	var opts []client.ListOption
+
+	if err := a.Client.List(ctx, &bmhList, opts...); err != nil {
+		return resp, http.StatusInternalServerError, fmt.Errorf("failed to get bmh list: %w", err)
+	}
+
+	for _, bmh := range bmhList.Items {
+		if includeInInventory(bmh) {
+			resp = append(resp, getResourceInfo(bmh))
+		}
+	}
 
 	return resp, http.StatusOK, nil
 }

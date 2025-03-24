@@ -47,7 +47,7 @@ func getResourceInfoDescription(resource hwmgrapi.ApiprotoResource) string {
 	return *resource.Description
 }
 
-func getResourceInfoGlobalAsserId(resource hwmgrapi.ApiprotoResource) *string {
+func getResourceInfoGlobalAssetId(resource hwmgrapi.ApiprotoResource) *string {
 	return resource.GlobalAssetId
 }
 
@@ -228,7 +228,7 @@ func getResourceInfo(resource hwmgrapi.ApiprotoResource, server *hwmgrapi.Apipro
 	return invserver.ResourceInfo{
 		AdminState:       getResourceInfoAdminState(resource),
 		Description:      getResourceInfoDescription(resource),
-		GlobalAssetId:    getResourceInfoGlobalAsserId(resource),
+		GlobalAssetId:    getResourceInfoGlobalAssetId(resource),
 		Groups:           getResourceInfoGroups(resource),
 		HwProfile:        getResourceInfoResourceProfileId(resource),
 		Labels:           getResourceInfoLabels(resource),

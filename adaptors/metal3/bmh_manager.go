@@ -47,7 +47,7 @@ func (a *Adaptor) FetchBMHList(ctx context.Context, site string) (metal3v1alpha1
 
 	// Add label selector only if site is not empty
 	if site != "" {
-		opts = append(opts, client.MatchingLabels{"siteId": site})
+		opts = append(opts, client.MatchingLabels{LabelSiteID: site})
 	}
 
 	if err := a.Client.List(ctx, &bmhList, opts...); err != nil {
@@ -55,7 +55,7 @@ func (a *Adaptor) FetchBMHList(ctx context.Context, site string) (metal3v1alpha1
 	}
 
 	if len(bmhList.Items) == 0 {
-		a.Logger.WarnContext(ctx, "No BareMetalHosts found for siteId", slog.String("siteId", site))
+		a.Logger.WarnContext(ctx, "No BareMetalHosts found for siteId", slog.String(LabelSiteID, site))
 	}
 
 	return bmhList, nil
@@ -66,7 +66,7 @@ func (a *Adaptor) FilterBMHList(ctx context.Context, bmhList *metal3v1alpha1.Bar
 	var filtered metal3v1alpha1.BareMetalHostList
 	for _, bmh := range bmhList.Items {
 		if bmh.Status.Provisioning.State == metal3v1alpha1.StateAvailable {
-			if poolID, exists := bmh.Labels["resourcePoolId"]; exists && poolID == resourcePoolID {
+			if poolID, exists := bmh.Labels[LabelResourcePoolID]; exists && poolID == resourcePoolID {
 				filtered.Items = append(filtered.Items, bmh)
 			}
 		}
@@ -95,7 +95,7 @@ func (a *Adaptor) getUnallocatedBMHs(ctx context.Context, bmhList metal3v1alpha1
 func (a *Adaptor) GroupBMHsByResourcePool(unallocatedBMHs []metal3v1alpha1.BareMetalHost) map[string][]metal3v1alpha1.BareMetalHost {
 	grouped := make(map[string][]metal3v1alpha1.BareMetalHost)
 	for _, bmh := range unallocatedBMHs {
-		if resourcePoolID, exists := bmh.Labels["resourcePoolId"]; exists {
+		if resourcePoolID, exists := bmh.Labels[LabelResourcePoolID]; exists {
 			grouped[resourcePoolID] = append(grouped[resourcePoolID], bmh)
 		}
 	}
