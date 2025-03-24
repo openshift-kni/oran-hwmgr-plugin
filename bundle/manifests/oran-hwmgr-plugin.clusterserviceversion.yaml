@@ -26,6 +26,23 @@ metadata:
           "status": {
             "observedGeneration": 1
           }
+        },
+        {
+          "apiVersion": "hwmgr-plugin.oran.openshift.io/v1alpha1",
+          "kind": "HardwareProfile",
+          "metadata": {
+            "name": "sample-profile",
+            "namespace": "oran-hwmgr-plugin"
+          },
+          "spec": {
+            "bios": {
+              "attributes": {
+                "SriovGlobalEnable": "Enabled",
+                "SysProfile": "Custom",
+                "WorkloadProfile": "TelcoOptimizedProfile"
+              }
+            }
+          }
         }
       ]
     capabilities: Basic Install

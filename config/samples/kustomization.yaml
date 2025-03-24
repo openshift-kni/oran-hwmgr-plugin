@@ -1,4 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
 - hwmgr-plugin_v1alpha1_hardwaremanager.yaml
+- hwmgr-plugin_v1alpha1_hardwareprofile.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples
