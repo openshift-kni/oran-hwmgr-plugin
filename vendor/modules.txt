@@ -367,7 +367,7 @@ github.com/onsi/gomega/types
 # github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-00010101000000-000000000000 => ./api/hwmgr-plugin
 ## explicit; go 1.22.0
 github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1
-# github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250124152543-be560cbe2609
+# github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250326123606-1734d8813393
 ## explicit; go 1.22.0
 github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
 # github.com/perimeterx/marshmallow v1.1.5

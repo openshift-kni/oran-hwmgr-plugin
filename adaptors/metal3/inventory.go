@@ -7,14 +7,24 @@ SPDX-License-Identifier: Apache-2.0
 package metal3
 
 import (
+	"regexp"
+
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
 )
 
 const (
-	LabelResourcePoolID = "resourcePoolId"
-	LabelSiteID         = "siteId"
+	LabelPrefixResources = "resources.oran.openshift.io/"
+	LabelResourcePoolID  = LabelPrefixResources + "resourcePoolId"
+	LabelSiteID          = LabelPrefixResources + "siteId"
+
+	LabelPrefixResourceSelector = "resourceselector.oran.openshift.io/"
+
+	LabelPrefixInterfaces = "interfacelabel.oran.openshift.io/"
 )
+
+// The following regex pattern is used to find interface labels
+var REPatternInterfaceLabel = regexp.MustCompile(`^` + LabelPrefixInterfaces + `(.*)`)
 
 var emptyString = ""
 

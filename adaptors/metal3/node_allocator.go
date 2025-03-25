@@ -31,7 +31,7 @@ func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh metal3v1alpha1.
 	}
 	nodepool.Status.Properties.NodeNames = append(nodepool.Status.Properties.NodeNames, nodeName)
 
-	bmhInteface := a.buildInterfacesFromBMH(bmh)
+	bmhInteface := a.buildInterfacesFromBMH(nodepool, bmh)
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodePoolData.ResourcePoolId,
 		BMC: &bmhBmcInfo{

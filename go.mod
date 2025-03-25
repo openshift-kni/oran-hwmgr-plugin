@@ -17,7 +17,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-00010101000000-000000000000
-	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250124152543-be560cbe2609
+	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250326123606-1734d8813393
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
 	github.com/samber/lo v1.49.1
 	github.com/sethvargo/go-retry v0.3.0

@@ -102,21 +102,37 @@ func (a *Adaptor) GroupBMHsByResourcePool(unallocatedBMHs []metal3v1alpha1.BareM
 	return grouped
 }
 
-func (a *Adaptor) buildInterfacesFromBMH(bmh metal3v1alpha1.BareMetalHost) []*hwmgmtv1alpha1.Interface {
+func (a *Adaptor) buildInterfacesFromBMH(nodepool *hwmgmtv1alpha1.NodePool, bmh metal3v1alpha1.BareMetalHost) []*hwmgmtv1alpha1.Interface {
 	var interfaces []*hwmgmtv1alpha1.Interface
 
 	for _, nic := range bmh.Status.HardwareDetails.NIC {
 		label := ""
-		mac := nic.MAC
+
 		if strings.EqualFold(nic.MAC, bmh.Spec.BootMACAddress) {
-			label = "bootable-interface"
-			// use the current BMH mac address format
-			mac = bmh.Spec.BootMACAddress
+			// For the boot interface, use the label from the bootInterfaceLabel annotation on the nodepool CR
+			label = nodepool.Annotations[hwmgmtv1alpha1.BootInterfaceLabelAnnotation]
+		} else {
+			// Interface labels with MACs use - instead of :
+			hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")
+
+			// Process interface labels
+			for fullLabel, value := range bmh.Labels {
+				match := REPatternInterfaceLabel.FindStringSubmatch(fullLabel)
+				if len(match) != 2 {
+					continue
+				}
+
+				if value == nic.Name || strings.EqualFold(hyphenatedMac, value) {
+					// We found a matching label
+					label = match[1]
+					break
+				}
+			}
 		}
 
 		interfaces = append(interfaces, &hwmgmtv1alpha1.Interface{
 			Name:       nic.Name,
-			MACAddress: mac,
+			MACAddress: nic.MAC,
 			Label:      label,
 		})
 	}
