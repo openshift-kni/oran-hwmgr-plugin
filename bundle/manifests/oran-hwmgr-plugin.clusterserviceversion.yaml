@@ -127,14 +127,14 @@ spec:
         path: bios
       - displayName: Attributes
         path: bios.attributes
-      - description: BiosVersion is the desired firmware version of BIOS
-        displayName: BIOS Version
-        path: biosVersion
+      - description: BIOS firmware information
+        displayName: BIOS Firmware
+        path: biosFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: BmcVersion is the desired firmware version of BMC
-        displayName: BMC Version
-        path: bmcVersion
+      - description: BMC firmware information
+        displayName: BMC Firmware
+        path: bmcFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
@@ -254,9 +254,30 @@ spec:
         - apiGroups:
           - metal3.io
           resources:
+          - hostfirmwarecomponents
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
           - hostfirmwaresettings
           verbs:
           - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - preprovisioningimages
+          verbs:
           - get
           - list
           - patch

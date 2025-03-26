@@ -105,9 +105,30 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
+  - hostfirmwarecomponents
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
   - hostfirmwaresettings
   verbs:
   - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - preprovisioningimages
+  verbs:
   - get
   - list
   - patch

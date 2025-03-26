@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"reflect"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ const (
 const (
 	JobIdAnnotation         = "hwmgr-plugin.oran.openshift.io/jobId"
 	DeletionJobIdAnnotation = "hwmgr-plugin.oran.openshift.io/deletionJobId"
-	BiosAnnotation          = "hwmgr-plugin.oran.openshift.io/bios-config"
+	ConfigAnnotation        = "hwmgr-plugin.oran.openshift.io/config-in-progress"
 )
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
@@ -265,28 +266,35 @@ func ClearDeletionJobId(object client.Object) {
 	}
 }
 
-func GetBiosConfig(object client.Object) string {
+func GetConfigAnnotation(object client.Object) string {
 	annotations := object.GetAnnotations()
 	if annotations == nil {
 		return ""
 	}
-
-	return annotations[BiosAnnotation]
+	if val, ok := annotations[ConfigAnnotation]; ok {
+		return val
+	}
+	return ""
 }
 
-func SetBiosConfig(object client.Object, name string) {
+func SetConfigAnnotation(object client.Object, reason string) {
 	annotations := object.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
 
-	annotations[BiosAnnotation] = name
+	annotations[ConfigAnnotation] = reason
 	object.SetAnnotations(annotations)
 }
 
-func RemoveBiosConfig(object client.Object) {
+func RemoveConfigAnnotation(object client.Object) {
 	annotations := object.GetAnnotations()
-	delete(annotations, BiosAnnotation)
+	delete(annotations, ConfigAnnotation)
+}
+
+func IsValidURL(u string) bool {
+	parsed, err := url.ParseRequestURI(u)
+	return err == nil && parsed.Scheme != "" && parsed.Host != ""
 }
 
 //

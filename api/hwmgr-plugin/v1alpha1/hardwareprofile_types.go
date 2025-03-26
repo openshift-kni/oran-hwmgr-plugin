@@ -18,6 +18,13 @@ type Bios struct {
 	Attributes map[string]intstr.IntOrString `json:"attributes,omitempty"`
 }
 
+type Firmware struct {
+	// Version is the desired firmware version
+	Version string `json:"version,omitempty"`
+	// URL points to the firmware file
+	URL string `json:"url,omitempty"`
+}
+
 // HardwareProfileSpec defines the desired state of HardwareProfile
 type HardwareProfileSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -26,13 +33,13 @@ type HardwareProfileSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Bios Bios `json:"bios"`
 
-	// BiosVersion is the desired firmware version of BIOS
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BIOS Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BiosVersion string `json:"biosVersion,omitempty"`
+	// BIOS firmware information
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BIOS Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	BiosFirmware Firmware `json:"biosFirmware,omitempty"`
 
-	// BmcVersion is the desired firmware version of BMC
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BMC Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BmcVersion string `json:"bmcVersion,omitempty"`
+	// BMC firmware information
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BMC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	BmcFirmware Firmware `json:"bmcFirmware,omitempty"`
 }
 
 // HardwareProfileStatus defines the observed state of HardwareProfile
@@ -80,4 +87,8 @@ type HardwareProfileList struct {
 
 func init() {
 	SchemeBuilder.Register(&HardwareProfile{}, &HardwareProfileList{})
+}
+
+func (fm Firmware) IsEmpty() bool {
+	return fm.Version == "" && fm.URL == ""
 }

@@ -20,7 +20,7 @@ import (
 )
 
 // AllocateBMH assigns a BareMetalHost to a NodePool.
-func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh metal3v1alpha1.BareMetalHost, nodepool *hwmgmtv1alpha1.NodePool, group hwmgmtv1alpha1.NodeGroup) error {
+func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, nodepool *hwmgmtv1alpha1.NodePool, group hwmgmtv1alpha1.NodeGroup) error {
 	nodeName := utils.GenerateNodeName()
 	nodeId := bmh.Name
 	nodeNs := bmh.Namespace
@@ -29,9 +29,15 @@ func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh metal3v1alpha1.
 	if err := a.CreateNode(ctx, nodepool, cloudID, nodeName, nodeId, nodeNs, group.NodePoolData.Name, group.NodePoolData.HwProfile); err != nil {
 		return fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
+
+	// Label the BMH
+	if err := a.markBMHAllocated(ctx, bmh); err != nil {
+		return fmt.Errorf("failed to add allocated label to node (%s): %w", nodeName, err)
+	}
+
 	nodepool.Status.Properties.NodeNames = append(nodepool.Status.Properties.NodeNames, nodeName)
 
-	bmhInteface := a.buildInterfacesFromBMH(nodepool, bmh)
+	bmhInteface := a.buildInterfacesFromBMH(nodepool, *bmh)
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodePoolData.ResourcePoolId,
 		BMC: &bmhBmcInfo{
@@ -57,25 +63,35 @@ func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh metal3v1alpha1.
 	return nil
 }
 
-// ProcessNodePoolAllocation allocates BareMetalHosts to a NodePool using parallel processing.
+// ProcessNodePoolAllocation allocates BareMetalHosts to a NodePool while ensuring all BMHs are in the same namespace.
 func (a *Adaptor) ProcessNodePoolAllocation(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) error {
-	// Fetch BMH list for the NodePool's site
-	bmhList, err := a.FetchBMHList(ctx, nodepool.Spec.Site)
-	if err != nil {
-		return fmt.Errorf("unable to fetch BMHs for site %s: %w", nodepool.Spec.Site, err)
-	}
-
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var allocationErr error
 
+	// Get the BMH namespace from an already allocated node in this pool
+	bmhNamespace, err := a.getNodePoolBMHNamespace(ctx, nodepool)
+	if err != nil {
+		return fmt.Errorf("unable to determine BMH namespace for pool %s: %w", nodepool.Name, err)
+	}
+
+	// Process allocation for each NodeGroup
 	for _, nodeGroup := range nodepool.Spec.NodeGroup {
 		if nodeGroup.Size == 0 {
 			continue // Skip groups with size 0
 		}
 
-		// Filter BMHs for the current resourcePoolId
-		filteredBMHList := a.FilterBMHList(ctx, &bmhList, nodeGroup.NodePoolData.ResourcePoolId)
+		// Retrieve only unallocated BMHs for the current site, resourcePoolId, and namespace
+		unallocatedBMHs, err := a.FetchBMHList(ctx, nodepool.Spec.Site, nodeGroup.NodePoolData.ResourcePoolId, UnallocatedBMHs, bmhNamespace)
+		if err != nil {
+			return fmt.Errorf("unable to fetch unallocated BMHs for site %s, poolID %s: %w",
+				nodepool.Spec.Site, nodeGroup.NodePoolData.ResourcePoolId, err)
+		}
+
+		if len(unallocatedBMHs.Items) == 0 {
+			return fmt.Errorf("no available nodes for site %s, poolID %s",
+				nodepool.Spec.Site, nodeGroup.NodePoolData.ResourcePoolId)
+		}
 
 		// Calculate pending nodes for the group
 		pendingNodes := nodeGroup.Size - a.countNodesInGroup(ctx, nodepool.Status.Properties.NodeNames, nodeGroup.NodePoolData.Name)
@@ -87,41 +103,32 @@ func (a *Adaptor) ProcessNodePoolAllocation(ctx context.Context, nodepool *hwmgm
 		nodeCounter := pendingNodes
 
 		// Allocate multiple nodes concurrently within the group
-		for _, bmh := range filteredBMHList.Items {
+		for _, bmh := range unallocatedBMHs.Items {
 			mu.Lock()
 			if nodeCounter <= 0 {
 				mu.Unlock()
 				break // Stop allocation if we've reached the required count
 			}
+
 			nodeCounter--
 			mu.Unlock()
 
 			wg.Add(1)
-			go func(bmh metal3v1alpha1.BareMetalHost) {
+			go func(bmh *metal3v1alpha1.BareMetalHost) {
 				defer wg.Done()
 
-				allocated, err := a.isBMHAllocated(ctx, bmh)
+				// Allocate BMH to NodePool
+				err := a.allocateBMHToNodePool(ctx, bmh, nodepool, nodeGroup)
 				if err != nil {
 					mu.Lock()
-					allocationErr = fmt.Errorf("unable to check if BMH is allocated %s/%s: %w", bmh.Namespace, bmh.Name, err)
-					mu.Unlock()
-					return
-				}
-
-				if !allocated {
-					err := a.allocateBMHToNodePool(ctx, bmh, nodepool, nodeGroup)
-					if err != nil {
-						mu.Lock()
-						if typederrors.IsInputError(err) {
-							allocationErr = err
-						} else {
-							allocationErr = fmt.Errorf("failed to allocate BMH %s: %w", bmh.Name, err)
-						}
-						mu.Unlock()
-						return
+					if typederrors.IsInputError(err) {
+						allocationErr = err
+					} else {
+						allocationErr = fmt.Errorf("failed to allocate BMH %s: %w", bmh.Name, err)
 					}
+					mu.Unlock()
 				}
-			}(bmh)
+			}(&bmh)
 		}
 	}
 
@@ -138,4 +145,28 @@ func (a *Adaptor) ProcessNodePoolAllocation(ctx context.Context, nodepool *hwmgm
 	}
 
 	return nil
+}
+
+// getNodePoolBMHNamespace retrieves the namespace of an already allocated BMH in the given NodePool.
+func (a *Adaptor) getNodePoolBMHNamespace(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (string, error) {
+	for _, nodeGroup := range nodepool.Spec.NodeGroup {
+		if nodeGroup.Size == 0 {
+			continue // Skip groups with size 0
+		}
+
+		resourcePoolId := nodeGroup.NodePoolData.ResourcePoolId
+
+		// Fetch only allocated BMHs that match site and resourcePoolId
+		bmhList, err := a.FetchBMHList(ctx, nodepool.Spec.Site, resourcePoolId, AllocatedBMHs, "")
+		if err != nil {
+			return "", fmt.Errorf("unable to fetch allocated BMHs for resource pool %s: %w", resourcePoolId, err)
+		}
+
+		// Return the namespace of the first allocated BMH and stop searching
+		if len(bmhList.Items) > 0 {
+			return bmhList.Items[0].Namespace, nil
+		}
+	}
+
+	return "", nil // No allocated BMH found, return empty namespace
 }

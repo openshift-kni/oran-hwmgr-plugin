@@ -57,8 +57,8 @@ func (a *Adaptor) updateHostFirmwareSettings(ctx context.Context, name types.Nam
 	})
 }
 
-func (a *Adaptor) IsBiosUpdateRequired(ctx context.Context, bmh metal3v1alpha1.BareMetalHost, biosSettings pluginv1alpha1.Bios) (bool, error) {
-	hfs := convertBiosSettingsToHostFirmware(bmh, biosSettings)
+func (a *Adaptor) IsBiosUpdateRequired(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, biosSettings pluginv1alpha1.Bios) (bool, error) {
+	hfs := convertBiosSettingsToHostFirmware(*bmh, biosSettings)
 
 	existingHFS, err := a.getOrCreateHostFirmwareSettings(ctx, &hfs)
 	if err != nil {

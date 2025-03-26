@@ -117,37 +117,26 @@ func (a *Adaptor) ProcessNewNodePool(ctx context.Context,
 	hwmgr *pluginv1alpha1.HardwareManager,
 	nodepool *hwmgmtv1alpha1.NodePool) error {
 
-	cloudID := nodepool.Spec.CloudID
-	a.Logger.InfoContext(ctx, "Processing ProcessNewNodePool request:",
-		slog.String("cloudID", cloudID),
-	)
+	a.Logger.InfoContext(ctx, "Processing ProcessNewNodePool request")
 
-	// Fetch the list of BMHs for the NodePool's site
-	bmhList, err := a.FetchBMHList(ctx, nodepool.Spec.Site)
-	if err != nil {
-		return fmt.Errorf("unable to fetch BMHs for site %s: %w", nodepool.Spec.Site, err)
-	}
-
-	// Filter the unallocated BMHs
-	unallocatedBMHs, err := a.getUnallocatedBMHs(ctx, bmhList)
-	if err != nil {
-		return fmt.Errorf("unable to fetch unallocated BMHs for site %s: %w", nodepool.Spec.Site, err)
-	}
-
-	// Group unallocated BMHs by resourcePoolId
-	groupedBMHs := a.GroupBMHsByResourcePool(unallocatedBMHs)
-
-	// Check if enough resources are available
+	// Check if enough resources are available for each NodeGroup
 	for _, nodeGroup := range nodepool.Spec.NodeGroup {
 		if nodeGroup.Size == 0 {
 			continue // Skip groups with size 0
 		}
 
 		resourcePoolId := nodeGroup.NodePoolData.ResourcePoolId
-		bmhListForGroup := groupedBMHs[resourcePoolId]
 
-		if len(bmhListForGroup) < nodeGroup.Size {
-			return fmt.Errorf("not enough free resources in resource pool %s: freenodes=%d", resourcePoolId, len(bmhListForGroup))
+		// Fetch unallocated BMHs for the specific site and poolID
+		bmhListForGroup, err := a.FetchBMHList(ctx, nodepool.Spec.Site, resourcePoolId, UnallocatedBMHs, "")
+		if err != nil {
+			return fmt.Errorf("unable to fetch BMHs for resource pool %s: %w", resourcePoolId, err)
+		}
+
+		// Ensure enough resources exist in the requested pool
+		if len(bmhListForGroup.Items) < nodeGroup.Size {
+			return fmt.Errorf("not enough free resources in resource pool %s: freenodes=%d, required=%d",
+				resourcePoolId, len(bmhListForGroup.Items), nodeGroup.Size)
 		}
 	}
 
@@ -178,6 +167,24 @@ func (a *Adaptor) ReleaseNodePool(ctx context.Context,
 	a.Logger.InfoContext(ctx, "Processing ReleaseNodePool request:",
 		slog.String("cloudID", cloudID),
 	)
-	// TODO: what needs to be done here
+
+	// remove the allocated label from BMHs and finalizer from the corresponding PreprovisioningImage resources
+	nodelist, err := utils.GetChildNodes(ctx, a.Logger, a.Client, nodepool)
+	if err != nil {
+		return fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodepool.Name, err)
+	}
+	for _, node := range nodelist.Items {
+		bmh, err := a.getBMHForNode(ctx, &node)
+		if err != nil {
+			return fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		}
+		if err = a.unmarkBMHAllocated(ctx, bmh); err != nil {
+			return fmt.Errorf("failed to unmarkBMHAllocated: %w", err)
+		}
+		if err = a.removeMetal3Finalizer(ctx, bmh.Name, bmh.Namespace); err != nil {
+			return fmt.Errorf("failed to remove finalizer: %w", err)
+		}
+	}
+
 	return nil
 }

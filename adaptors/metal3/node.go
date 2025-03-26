@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/util/retry"
 )
 
-// CreateNode creates a Node CR with specified attributes
+// GetNodeList retrieves the node list
 func (a *Adaptor) GetNodeList(ctx context.Context) (*hwmgmtv1alpha1.NodeList, error) {
 
 	nodeList := &hwmgmtv1alpha1.NodeList{}
@@ -42,7 +42,7 @@ func (a *Adaptor) CreateNode(ctx context.Context, nodepool *hwmgmtv1alpha1.NodeP
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
 			Namespace: a.Namespace,
-			Labels:    map[string]string{BMH_NAMESPACE_LABEL: nodeNs},
+			Labels:    map[string]string{BmhNamespaceLabel: nodeNs},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodepool.APIVersion,
 				Kind:               nodepool.Kind,
@@ -95,7 +95,7 @@ func (a *Adaptor) UpdateNodeStatus(ctx context.Context, info bmhNodeInfo, nodena
 		status := metav1.ConditionTrue
 		if updating {
 			reason = hwmgmtv1alpha1.InProgress
-			message = "Configuring BIOS"
+			message = "Hardware configuration in progess"
 			status = metav1.ConditionFalse
 		}
 		utils.SetStatusCondition(&node.Status.Conditions,
@@ -124,7 +124,7 @@ func (a *Adaptor) ApplyPostConfigUpdates(ctx context.Context, bmhName types.Name
 			return fmt.Errorf("failed to fetch Node: %w", err)
 		}
 
-		utils.RemoveBiosConfig(updatedNode)
+		utils.RemoveConfigAnnotation(updatedNode)
 		if err := a.Client.Update(ctx, updatedNode); err != nil {
 			return fmt.Errorf("failed to remove annotation for node %s/%s: %w", updatedNode.Name, updatedNode.Namespace, err)
 		}

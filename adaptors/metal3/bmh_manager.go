@@ -9,23 +9,41 @@ package metal3
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"log/slog"
+	"strings"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+)
+
+// BMHAllocationStatus defines filtering options for FetchBMHList
+type BMHAllocationStatus string
+
+const (
+	AllBMHs         BMHAllocationStatus = "all"
+	UnallocatedBMHs BMHAllocationStatus = "unallocated"
+	AllocatedBMHs   BMHAllocationStatus = "allocated"
 )
 
 const (
-	BIOS_UPDATE_NEEDED_ANNOTATION = "bios-update-needed"
-	BMH_NAMESPACE_LABEL           = "baremetalhost.metal3.io/namespace"
+	BiosUpdateNeededAnnotation     = "hwmgr-plugin.oran.openshift.io/bios-update-needed"
+	FirmwareUpdateNeededAnnotation = "hwmgr-plugin.oran.openshift.io/firmware-update-needed"
+	BmhNamespaceLabel              = "baremetalhost.metal3.io/namespace"
+	BmhAllocatedLabel              = "hwmgr-plugin.oran.openshift.io/allocated"
+	Metal3Finalizer                = "preprovisioningimage.metal3.io"
+	UpdateReasonBIOSSettings       = "bios-settings-update"
+	UpdateReasonFirmware           = "firmware-update"
+	LabelValueTrue                 = "true"
+	LabelOpAdd                     = "add"
+	LabelOpRemove                  = "remove"
 )
 
 // Struct definitions for the nodelist configmap
@@ -40,61 +58,145 @@ type bmhNodeInfo struct {
 	Interfaces     []*hwmgmtv1alpha1.Interface `json:"interfaces,omitempty"`
 }
 
-// FetchBMHList retrieves a list of BareMetalHosts filtered by site ID.
-func (a *Adaptor) FetchBMHList(ctx context.Context, site string) (metal3v1alpha1.BareMetalHostList, error) {
-	var bmhList metal3v1alpha1.BareMetalHostList
-	var opts []client.ListOption
+func (a *Adaptor) updateBMHLabelWithRetry(ctx context.Context, name types.NamespacedName, labelKey, labelValue, operation string) error {
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		// Fetch the latest version of the BMH
+		var latestBMH metal3v1alpha1.BareMetalHost
+		if err := a.Client.Get(ctx, name, &latestBMH); err != nil {
+			a.Logger.ErrorContext(ctx, "Failed to fetch BMH for label update",
+				slog.Any("bmh", name),
+				slog.String("error", err.Error()))
+			return err
+		}
 
-	// Add label selector only if site is not empty
+		// Early return for no-op remove
+		if operation == LabelOpRemove {
+			if latestBMH.Labels == nil {
+				a.Logger.InfoContext(ctx, "BMH has no labels, skipping remove operation",
+					slog.Any("bmh", name))
+				return nil
+			}
+			if _, exists := latestBMH.Labels[labelKey]; !exists {
+				a.Logger.InfoContext(ctx, "Label not present, skipping remove operation",
+					slog.Any("bmh", name),
+					slog.String("label", labelKey))
+				return nil
+			}
+		}
+
+		// Create a patch base
+		patch := client.MergeFrom(latestBMH.DeepCopy())
+
+		if operation == LabelOpAdd && latestBMH.Labels == nil {
+			latestBMH.Labels = make(map[string]string)
+		}
+
+		switch operation {
+		case LabelOpAdd:
+			latestBMH.Labels[labelKey] = labelValue
+		case LabelOpRemove:
+			delete(latestBMH.Labels, labelKey)
+		default:
+			return fmt.Errorf("unsupported operation: %s", operation)
+		}
+
+		// Apply the patch
+		if err := a.Client.Patch(ctx, &latestBMH, patch); err != nil {
+			a.Logger.ErrorContext(ctx, "Failed to update BMH label",
+				slog.String("bmh", name.Name),
+				slog.String("operation", operation),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to %s label on BMH %s: %w", operation, name.Name, err)
+		}
+
+		a.Logger.InfoContext(ctx, "Successfully updated BMH label",
+			slog.String("bmh", name.Name),
+			slog.String("operation", operation))
+		return nil
+	})
+}
+
+// FetchBMHList retrieves BareMetalHosts filtered by site ID, allocation status, and optional namespace.
+func (a *Adaptor) FetchBMHList(ctx context.Context, site, poolID string, allocationStatus BMHAllocationStatus,
+	namespace string) (metal3v1alpha1.BareMetalHostList, error) {
+
+	var bmhList metal3v1alpha1.BareMetalHostList
+	opts := []client.ListOption{}
+
+	// Add site ID filter if provided
 	if site != "" {
 		opts = append(opts, client.MatchingLabels{LabelSiteID: site})
 	}
 
+	// Add pool ID filter if provided
+	if poolID != "" {
+		opts = append(opts, client.MatchingLabels{LabelResourcePoolID: poolID})
+	}
+
+	// Add namespace filter if provided
+	if namespace != "" {
+		opts = append(opts, client.InNamespace(namespace))
+	}
+
+	// Apply allocation filtering based on enum value
+	switch allocationStatus {
+	case AllocatedBMHs:
+		// Fetch only allocated BMHs
+		opts = append(opts, client.MatchingLabels{BmhAllocatedLabel: LabelValueTrue})
+
+	case UnallocatedBMHs:
+		// Fetch only unallocated BMHs
+		selector := metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      BmhAllocatedLabel,
+					Operator: metav1.LabelSelectorOpNotIn,
+					Values:   []string{LabelValueTrue}, // Exclude allocated=true
+				},
+			},
+		}
+		labelSelector, err := metav1.LabelSelectorAsSelector(&selector)
+		if err != nil {
+			return bmhList, fmt.Errorf("failed to create label selector: %w", err)
+		}
+		opts = append(opts, client.MatchingLabelsSelector{Selector: labelSelector})
+
+	case AllBMHs:
+		// fetch all BMHs
+	}
+
+	// Fetch BMHs based on filters
 	if err := a.Client.List(ctx, &bmhList, opts...); err != nil {
-		return bmhList, fmt.Errorf("failed to get bmh list: %w", err)
+		return bmhList, fmt.Errorf("failed to get BMH list: %w", err)
 	}
 
 	if len(bmhList.Items) == 0 {
-		a.Logger.WarnContext(ctx, "No BareMetalHosts found for siteId", slog.String(LabelSiteID, site))
+		a.Logger.WarnContext(ctx, "No BareMetalHosts found",
+			slog.String(LabelSiteID, site),
+			slog.String("Allocation Status", string(allocationStatus)))
+		return bmhList, nil
 	}
 
-	return bmhList, nil
+	// we only care about the ones in "available" state
+	return filterAvailableBMHs(bmhList), nil
 }
 
-// FilterBMHList filters BareMetalHosts by resource pool ID and availability.
-func (a *Adaptor) FilterBMHList(ctx context.Context, bmhList *metal3v1alpha1.BareMetalHostList, resourcePoolID string) metal3v1alpha1.BareMetalHostList {
-	var filtered metal3v1alpha1.BareMetalHostList
+// filterAvailableBMHs filters out BareMetalHosts that are not in the "Available" provisioning state.
+func filterAvailableBMHs(bmhList metal3v1alpha1.BareMetalHostList) metal3v1alpha1.BareMetalHostList {
+	var filteredBMHs metal3v1alpha1.BareMetalHostList
 	for _, bmh := range bmhList.Items {
 		if bmh.Status.Provisioning.State == metal3v1alpha1.StateAvailable {
-			if poolID, exists := bmh.Labels[LabelResourcePoolID]; exists && poolID == resourcePoolID {
-				filtered.Items = append(filtered.Items, bmh)
-			}
+			filteredBMHs.Items = append(filteredBMHs.Items, bmh)
 		}
 	}
-	return filtered
-}
-
-// getUnallocatedBMHs returns a list of unallocated BMH
-func (a *Adaptor) getUnallocatedBMHs(ctx context.Context, bmhList metal3v1alpha1.BareMetalHostList) ([]metal3v1alpha1.BareMetalHost, error) {
-	var unallocatedBMHs []metal3v1alpha1.BareMetalHost
-
-	for _, bmh := range bmhList.Items {
-		allocated, err := a.isBMHAllocated(ctx, bmh)
-		if err != nil {
-			return nil, fmt.Errorf("error checking allocation status for BMH %s: %w", bmh.Name, err)
-		}
-
-		if !allocated {
-			unallocatedBMHs = append(unallocatedBMHs, bmh)
-		}
-	}
-	return unallocatedBMHs, nil
+	return filteredBMHs
 }
 
 // GroupBMHsByResourcePool groups unallocated BMHs by resource pool ID.
-func (a *Adaptor) GroupBMHsByResourcePool(unallocatedBMHs []metal3v1alpha1.BareMetalHost) map[string][]metal3v1alpha1.BareMetalHost {
+func (a *Adaptor) GroupBMHsByResourcePool(unallocatedBMHs metal3v1alpha1.BareMetalHostList) map[string][]metal3v1alpha1.BareMetalHost {
 	grouped := make(map[string][]metal3v1alpha1.BareMetalHost)
-	for _, bmh := range unallocatedBMHs {
+	for _, bmh := range unallocatedBMHs.Items {
 		if resourcePoolID, exists := bmh.Labels[LabelResourcePoolID]; exists {
 			grouped[resourcePoolID] = append(grouped[resourcePoolID], bmh)
 		}
@@ -153,20 +255,11 @@ func (a *Adaptor) countNodesInGroup(ctx context.Context, nodeNames []string, gro
 	return count
 }
 
-func (a *Adaptor) isBMHAllocated(ctx context.Context, bmh metal3v1alpha1.BareMetalHost) (bool, error) {
-	nodeList, err := a.GetNodeList(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to list nodes: %w", err)
+func (a *Adaptor) isBMHAllocated(bmh *metal3v1alpha1.BareMetalHost) bool {
+	if currentValue, exists := bmh.Labels[BmhAllocatedLabel]; exists && currentValue == LabelValueTrue {
+		return true
 	}
-
-	for _, node := range nodeList.Items {
-		// Could check the nodeId or BMC address
-		// if node.Status.BMC.Address == bmh.Spec.BMC.Address {
-		if node.Spec.HwMgrNodeId == bmh.Name {
-			return true, nil
-		}
-	}
-	return false, nil
+	return false
 }
 
 func (a *Adaptor) clearBMHNetworkData(ctx context.Context, name types.NamespacedName) error {
@@ -185,7 +278,7 @@ func (a *Adaptor) clearBMHNetworkData(ctx context.Context, name types.Namespaced
 	})
 }
 
-func (a *Adaptor) processHwProfile(ctx context.Context, bmh metal3v1alpha1.BareMetalHost, nodeName string) (bool, error) {
+func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, nodeName string) (bool, error) {
 
 	node, err := utils.GetNode(ctx, a.Logger, a.Client, a.Namespace, nodeName)
 	if err != nil {
@@ -211,9 +304,23 @@ func (a *Adaptor) processHwProfile(ctx context.Context, bmh metal3v1alpha1.BareM
 		}
 	}
 
-	// If update is required, annotate BMH
+	// Check if firmware update is required
+	firmwareUpdateRequired, err := a.IsFirmwareUpdateRequired(ctx, bmh, hwProfile.Spec)
+	if err != nil {
+		return false, err
+	}
+
+	// If bios update is required, annotate BMH
 	if updateRequired {
-		if err := a.annotateBMHNeedsBiosUpdate(ctx, bmh); err != nil {
+		if err := a.addBMHAnnotation(ctx, bmh, BiosUpdateNeededAnnotation); err != nil {
+			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
+		}
+		return true, nil
+	}
+
+	// if firmware update is required, annotate BMH
+	if firmwareUpdateRequired {
+		if err := a.addBMHAnnotation(ctx, bmh, FirmwareUpdateNeededAnnotation); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
 		return true, nil
@@ -233,21 +340,20 @@ func (a *Adaptor) checkBMHStatus(ctx context.Context, bmh *metal3v1alpha1.BareMe
 	return false
 }
 
-// annotateNodeBiosInProgress sets an annotation on the corresponding Node object to indicate BIOS config is in progress.
-func (a *Adaptor) annotateNodeBiosInProgress(ctx context.Context, nodeName string, bmh metal3v1alpha1.BareMetalHost) error {
-
+// aannotateNodeConfigInProgress sets an annotation on the corresponding Node object to indicate configuration is in progress.
+func (a *Adaptor) annotateNodeConfigInProgress(ctx context.Context, nodeName, reason string) error {
 	// Fetch the Node object
 	node := &hwmgmtv1alpha1.Node{}
 	if err := a.Client.Get(ctx, types.NamespacedName{Name: nodeName, Namespace: a.Namespace}, node); err != nil {
 		return fmt.Errorf("unable to get Node object (%s): %w", nodeName, err)
 	}
 
-	// Set annotation to indicate BIOS configuration is in progress
+	// Set annotation to indicate configuration is in progress
 	if node.Annotations == nil {
 		node.Annotations = make(map[string]string)
 	}
 
-	utils.SetBiosConfig(node, bmh.Name)
+	utils.SetConfigAnnotation(node, reason)
 
 	// Update the Node object
 	if err := a.Client.Update(ctx, node); err != nil {
@@ -266,29 +372,51 @@ func (a *Adaptor) handleBMHsTransitioningToPreparing(ctx context.Context, nodeli
 			return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 		}
 
-		// If the BMH needs BIOS update and is "Preparing", mark the node
-		if bmh.Annotations["bios-update-needed"] == "true" {
+		updateCases := []struct {
+			AnnotationKey string
+			Reason        string
+			LogLabel      string
+		}{
+			{BiosUpdateNeededAnnotation, UpdateReasonBIOSSettings, "BIOS settings"},
+			{FirmwareUpdateNeededAnnotation, UpdateReasonFirmware, "firmware"},
+		}
+
+		for _, uc := range updateCases {
+			_, updateNeeded := bmh.Annotations[uc.AnnotationKey]
+			if !updateNeeded {
+				continue
+			}
 
 			if bmh.Status.Provisioning.State != metal3v1alpha1.StatePreparing {
-				a.Logger.InfoContext(ctx, "BMH is not in 'Preparing' state yet, requeuing", slog.String("BMH", bmh.Name))
-				return true, nil // Requeue
+				a.Logger.InfoContext(ctx, "BMH is not in 'Preparing' state yet, requeuing",
+					slog.String("BMH", bmh.Name))
+				return true, nil
 			}
 
-			a.Logger.InfoContext(ctx, "BMH transitioned to 'Preparing' state", slog.String("BMH", bmh.Name))
+			a.Logger.InfoContext(ctx, fmt.Sprintf("BMH transitioned to 'Preparing' state for %s update", uc.LogLabel),
+				slog.String("BMH", bmh.Name))
 
-			// Remove "bios-update-needed" annotation
-			if err := a.removeBMHAnnotation(ctx, bmh, BIOS_UPDATE_NEEDED_ANNOTATION); err != nil {
+			// Remove the update-needed annotation
+			if err := a.removeBMHAnnotation(ctx, bmh, uc.AnnotationKey); err != nil {
 				return true, err
 			}
 
-			// Mark the node as BIOS update in progress
-			if err := a.annotateNodeBiosInProgress(ctx, node.Name, *bmh); err != nil {
-				a.Logger.ErrorContext(ctx, "Failed to annotate BIOS update in progress", slog.String("error", err.Error()))
-				return true, err
+			// Only annotate in-progress if not already set
+			if utils.GetConfigAnnotation(&node) == "" {
+				if err := a.annotateNodeConfigInProgress(ctx, node.Name, uc.Reason); err != nil {
+					a.Logger.ErrorContext(ctx, fmt.Sprintf("Failed to annotate %s update in progress", uc.LogLabel),
+						slog.String("error", err.Error()))
+					return true, err
+				}
+				a.Logger.InfoContext(ctx, fmt.Sprintf("BMH %s update initiated", uc.LogLabel),
+					slog.String("BMH", bmh.Name))
+			} else {
+				a.Logger.InfoContext(ctx, "Skipping annotation; another config already in progress",
+					slog.String("BMH", bmh.Name),
+					slog.String("skipped", uc.Reason))
 			}
 
-			a.Logger.InfoContext(ctx, "BMH BIOS update initiated", slog.String("BMH", bmh.Name))
-			return true, nil // Indicates BIOS update is ongoing
+			return true, nil
 		}
 	}
 	return false, nil
@@ -296,10 +424,10 @@ func (a *Adaptor) handleBMHsTransitioningToPreparing(ctx context.Context, nodeli
 
 func (a *Adaptor) handleBMHCompletion(ctx context.Context, nodelist *hwmgmtv1alpha1.NodeList) (bool, error) {
 
-	a.Logger.InfoContext(ctx, "Checking for node with BIOS config in progress")
+	a.Logger.InfoContext(ctx, "Checking for node with config in progress")
 	node := utils.FindNodeInProgress(nodelist)
 	if node == nil {
-		return false, nil // No node is in BIOS config progress
+		return false, nil // No node is in config progress
 	}
 
 	// Get BMH associated with the node
@@ -311,7 +439,7 @@ func (a *Adaptor) handleBMHCompletion(ctx context.Context, nodelist *hwmgmtv1alp
 	// Check if BMH has transitioned to "Available"
 	bmhAvailable := a.checkBMHStatus(ctx, bmh, metal3v1alpha1.StateAvailable)
 
-	// If BMH is not available yet, BIOS update is still ongoing
+	// If BMH is not available yet, update is still ongoing
 	if !bmhAvailable {
 		return true, nil
 	}
@@ -321,7 +449,7 @@ func (a *Adaptor) handleBMHCompletion(ctx context.Context, nodelist *hwmgmtv1alp
 		return false, fmt.Errorf("failed to apply post config update on node %s: %w", node.Name, err)
 	}
 
-	return false, nil // BIOS update is now complete
+	return false, nil // update is now complete
 }
 
 func (a *Adaptor) checkForPendingUpdate(ctx context.Context, nodepool *hwmgmtv1alpha1.NodePool) (bool, error) {
@@ -338,11 +466,11 @@ func (a *Adaptor) checkForPendingUpdate(ctx context.Context, nodepool *hwmgmtv1a
 	}
 
 	if updating {
-		a.Logger.InfoContext(ctx, "Skipping handleBMHCompletion as BIOS update is in progress")
+		a.Logger.InfoContext(ctx, "Skipping handleBMHCompletion as update is in progress")
 		return true, nil
 	}
 
-	// Check if BIOS configuration is completed
+	// Check if configuration is completed
 	updating, err = a.handleBMHCompletion(ctx, nodelist)
 	if err != nil {
 		return updating, err
@@ -353,7 +481,7 @@ func (a *Adaptor) checkForPendingUpdate(ctx context.Context, nodepool *hwmgmtv1a
 
 func (a *Adaptor) getBMHForNode(ctx context.Context, node *hwmgmtv1alpha1.Node) (*metal3v1alpha1.BareMetalHost, error) {
 	bmhName := node.Spec.HwMgrNodeId
-	bmhNamespace := node.Labels[BMH_NAMESPACE_LABEL]
+	bmhNamespace := node.Labels[BmhNamespaceLabel]
 	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}
 
 	var bmh metal3v1alpha1.BareMetalHost
@@ -364,18 +492,18 @@ func (a *Adaptor) getBMHForNode(ctx context.Context, node *hwmgmtv1alpha1.Node) 
 	return &bmh, nil
 }
 
-func (a *Adaptor) annotateBMHNeedsBiosUpdate(ctx context.Context, bmh metal3v1alpha1.BareMetalHost) error {
+func (a *Adaptor) addBMHAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, annotation string) error {
 	bmhPatch := client.MergeFrom(bmh.DeepCopy()) // Create a patch
 	if bmh.Annotations == nil {
 		bmh.Annotations = make(map[string]string)
 	}
-	bmh.Annotations[BIOS_UPDATE_NEEDED_ANNOTATION] = "true"
+	bmh.Annotations[annotation] = LabelValueTrue
 
-	if err := a.Client.Patch(ctx, &bmh, bmhPatch); err != nil {
-		return fmt.Errorf("failed to annotate BMH %s for BIOS update: %w", bmh.Name, err)
+	if err := a.Client.Patch(ctx, bmh, bmhPatch); err != nil {
+		return fmt.Errorf("failed to add '%s' annotate to BMH %s: %w", annotation, bmh.Name, err)
 	}
 
-	a.Logger.InfoContext(ctx, "Annotated BMH for BIOS update", slog.String("BMH", bmh.Name))
+	a.Logger.InfoContext(ctx, "Added annotatation to BMH", slog.String("BMH", bmh.Name), slog.String("annotation", annotation))
 	return nil
 }
 
@@ -387,5 +515,49 @@ func (a *Adaptor) removeBMHAnnotation(ctx context.Context, bmh *metal3v1alpha1.B
 		return fmt.Errorf("failed to remove '%s' annotation from BMH %s: %w", annotation, bmh.Name, err)
 	}
 
+	return nil
+}
+
+// markBMHAllocated sets the "allocated" label to "true" on a BareMetalHost.
+func (a *Adaptor) markBMHAllocated(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+	// Check if the BMH is already allocated to avoid unnecessary patching
+	if a.isBMHAllocated(bmh) {
+		a.Logger.InfoContext(ctx, "BMH is already allocated, skipping update", slog.String("bmh", bmh.Name))
+		return nil // No change needed
+	}
+	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	return a.updateBMHLabelWithRetry(ctx, name, BmhAllocatedLabel, LabelValueTrue, LabelOpAdd)
+}
+
+// unmarkBMHAllocated removes the "allocated" label from a BareMetalHost if it exists.
+func (a *Adaptor) unmarkBMHAllocated(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	return a.updateBMHLabelWithRetry(ctx, name, BmhAllocatedLabel, "", LabelOpRemove)
+}
+
+// removeMetal3Finalizer removes the Metal3 finalizer from the corresponding PreprovisioningImage resource.
+// This is necessary because BMO will not remove the finalizer when the assisted-service is managing the resource.
+func (a *Adaptor) removeMetal3Finalizer(ctx context.Context, bmhName, bmhNamespace string) error {
+	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}
+
+	// Retrieve the PreprovisioningImage resource
+	image := &metal3v1alpha1.PreprovisioningImage{}
+	if err := a.Client.Get(ctx, name, image); err != nil {
+		return fmt.Errorf("unable to find PreprovisioningImage (%v): %w", name, err)
+	}
+
+	// Check if the Metal3 finalizer is present
+	if !controllerutil.ContainsFinalizer(image, Metal3Finalizer) {
+		return nil
+	}
+
+	controllerutil.RemoveFinalizer(image, Metal3Finalizer)
+	if err := a.Client.Update(ctx, image); err != nil {
+		return fmt.Errorf("failed to remove finalizer %s from PreprovisioningImage %s: %w",
+			Metal3Finalizer, image.Name, err)
+	}
+
+	a.Logger.InfoContext(ctx, "Successfully removed Metal3 finalizer from PreprovisioningImage",
+		slog.String("PreprovisioningImage", image.Name))
 	return nil
 }
