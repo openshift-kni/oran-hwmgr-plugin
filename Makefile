@@ -265,6 +265,13 @@ ifneq ($(OPERATOR_SDK_VERSION),$(OPERATOR_SDK_VERSION_INSTALLED))
 	}
 endif
 
+# Determine sed flags based on the operating system
+ifeq ($(shell uname -s),Linux)
+SED_FLAGS := -i
+else
+SED_FLAGS := -i ''
+endif
+
 .PHONY: oapi-codegen
 oapi-codegen: $(OAPI_CODEGEN) ## Download oapi-codegen locally if necessary. If wrong version is installed, it will be overwritten.
 $(OAPI_CODEGEN): $(LOCALBIN)
@@ -281,7 +288,7 @@ bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests an
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	@rm bundle/manifests/oran-hwmgr-plugin-env-config_v1_configmap.yaml ## Clean up the temporary file for bundle validate
 	$(OPERATOR_SDK) bundle validate ./bundle
-	sed -i '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-hwmgr-plugin.clusterserviceversion.yaml
+	sed $(SED_FLAGS) -e '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-hwmgr-plugin.clusterserviceversion.yaml
 
 .PHONY: bundle-build
 bundle-build: bundle docker-push ## Build the bundle image.
