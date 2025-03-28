@@ -84,12 +84,7 @@ paths:
       tags:
         - inventory
       parameters:
-        - in: path
-          name: hwMgrId
-          required: true
-          schema:
-            type: string
-          example: some-vendor-location
+        - $ref: "#/components/parameters/hwMgrId"
       responses:
         '200':
           description: Successful response
@@ -137,12 +132,7 @@ paths:
       tags:
         - inventory
       parameters:
-        - in: path
-          name: hwMgrId
-          required: true
-          schema:
-            type: string
-          example: some-vendor-location
+        - $ref: "#/components/parameters/hwMgrId" 
         - in: path
           name: resourcePoolId
           required: true
@@ -182,12 +172,7 @@ paths:
       tags:
         - inventory
       parameters:
-        - in: path
-          name: hwMgrId
-          required: true
-          schema:
-            type: string
-          example: some-vendor-location
+        - $ref: "#/components/parameters/hwMgrId"
         - in: path
           name: resourcePoolId
           required: true
@@ -223,12 +208,7 @@ paths:
       tags:
         - inventory
       parameters:
-        - in: path
-          name: hwMgrId
-          required: true
-          schema:
-            type: string
-          example: some-vendor-location
+        - $ref: "#/components/parameters/hwMgrId"
       responses:
         '200':
           description: Successful response
@@ -270,12 +250,7 @@ paths:
       tags:
         - subscriptions
       parameters:
-        - in: path
-          name: hwMgrId
-          required: true
-          schema:
-            type: string
-          example: some-vendor-location
+        - $ref: "#/components/parameters/hwMgrId"
         - in: path
           name: resourceId
           required: true
@@ -308,7 +283,166 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
 
+  /hardware-manager/inventory/v1/manager/{hwMgrId}/subscriptions:
+    get:
+      operationId: GetSubscriptions
+      summary: Retrieve the list of inventory subscriptions
+      tags:
+      - subscriptions
+      parameters:
+        - $ref: "#/components/parameters/hwMgrId"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    post:
+      operationId: CreateSubscription
+      summary: Create subscription
+      description: |
+        Creates a resource subscription.
+      tags:
+      - subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+      parameters:
+        - $ref: "#/components/parameters/hwMgrId" 
+      responses:
+        '201':
+          description: |
+            Successfully created the subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/manager/{hwMgrId}/subscriptions/{subscriptionId}:
+    get:
+      operationId: GetSubscription
+      summary: Get subscription
+      description: |
+        Returns the details of a subscription.
+      parameters:
+      - $ref: "#/components/parameters/hwMgrId"
+      - $ref: "#/components/parameters/subscriptionId"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the subscription.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    delete:
+      operationId: DeleteSubscription
+      summary: Delete subscription
+      description: |
+        Deletes a subscription.
+      parameters:
+      - $ref: "#/components/parameters/hwMgrId"        
+      - $ref: "#/components/parameters/subscriptionId"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully deleted the subscription.
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
 components:
+  parameters:
+    hwMgrId:
+      name: hwMgrId
+      description: |
+        Unique identifier of a hardware manager.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: some-vendor-location  
+
+    subscriptionId:
+      name: subscriptionId
+      description: |
+        Unique identifier of a subscription.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: aa83d0ba-a5ee-4f1f-be84-f334b21166cf  
+
   schemas:
     APIVersion:
       description: |
@@ -540,3 +674,61 @@ components:
         - adminState
         - operationalState
         - usageState
+
+    Subscription:
+      description: |
+        Information about an inventory subscription.
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Identifier for the Subscription. This identifier is allocated by the Hardware Manager.
+        consumerSubscriptionId:
+          type: string
+          format: uuid
+          description: Identifier for the consumer of events sent due to the Subscription request.
+        filter:
+          type: string
+          description: |
+            Criteria for events which do not need to be reported or will be filtered by the subscription 
+            notification service. Therefore, if a filter is not provided then all events are reported.
+        callback:
+          type: string
+          description: |
+            The fully qualified URI to a consumer procedure which can process a Post of the 
+            ResourceChangeNotification.
+      required:
+      - callback
+
+    ResourceChangeNotification:
+      description: Information about a resource change notification
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          description: |
+            A unique identifier to represent this notification event
+        consumerSubscriptionId:
+          type: string
+          format: uuid
+          description: |
+            The value provided by the consumer in the subscription
+        notificationEventType:
+          type: integer
+          enum: [ 0, 1, 2 ]
+          description: |
+            One of the following values: 0 - create, 1 - modify, 2 - delete
+        objectRef:
+          type: string
+          description: |
+            The URL to the object. This is not required if the notificationEventType is 2 (DELETE).
+        object:
+          type: object
+          description: |
+            The changed resource object.
+      required:
+      - notificationId
+      - notificationEventType

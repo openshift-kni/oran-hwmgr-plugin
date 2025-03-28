@@ -74,3 +74,32 @@ func (i *InventoryServer) GetResource(ctx context.Context, request generated.Get
 	// TODO implement me
 	return generated.GetResource200JSONResponse{}, nil
 }
+
+// GetSubscriptions receives the API request to this endpoint, executes the request, and responds appropriately
+func (i *InventoryServer) GetSubscriptions(ctx context.Context, request generated.GetSubscriptionsRequestObject,
+) (generated.GetSubscriptionsResponseObject, error) {
+	// TODO
+	objects := make([]generated.Subscription, 1)
+	return generated.GetSubscriptions200JSONResponse(objects), nil
+}
+
+// CreateSubscription receives the API request to this endpoint, executes the request, and responds appropriately
+func (i *InventoryServer) CreateSubscription(ctx context.Context, request generated.CreateSubscriptionRequestObject,
+) (generated.CreateSubscriptionResponseObject, error) {
+	// TODO
+	return generated.CreateSubscription201JSONResponse(generated.Subscription{}), nil
+}
+
+// GetSubscription receives the API request to this endpoint, executes the request, and responds appropriately
+func (i *InventoryServer) GetSubscription(ctx context.Context, request generated.GetSubscriptionRequestObject,
+) (generated.GetSubscriptionResponseObject, error) {
+	// TODO
+	return generated.GetSubscription200JSONResponse(generated.Subscription{}), nil
+}
+
+// DeleteSubscription receives the API request to this endpoint, executes the request, and responds appropriately
+func (i *InventoryServer) DeleteSubscription(ctx context.Context, request generated.DeleteSubscriptionRequestObject,
+) (generated.DeleteSubscriptionResponseObject, error) {
+	// TODO
+	return generated.DeleteSubscription200Response{}, nil
+}

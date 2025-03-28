@@ -18,6 +18,14 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+)
+
+// Defines values for ResourceChangeNotificationNotificationEventType.
+const (
+	N0 ResourceChangeNotificationNotificationEventType = 0
+	N1 ResourceChangeNotificationNotificationEventType = 1
+	N2 ResourceChangeNotificationNotificationEventType = 2
 )
 
 // Defines values for ResourceInfoAdminState.
@@ -100,6 +108,27 @@ type ProcessorInfo struct {
 	Model *string `json:"model,omitempty"`
 }
 
+// ResourceChangeNotification Information about a resource change notification
+type ResourceChangeNotification struct {
+	// ConsumerSubscriptionId The value provided by the consumer in the subscription
+	ConsumerSubscriptionId *openapi_types.UUID `json:"consumerSubscriptionId,omitempty"`
+
+	// NotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
+	NotificationEventType ResourceChangeNotificationNotificationEventType `json:"notificationEventType"`
+
+	// NotificationId A unique identifier to represent this notification event
+	NotificationId openapi_types.UUID `json:"notificationId"`
+
+	// Object The changed resource object.
+	Object *map[string]interface{} `json:"object,omitempty"`
+
+	// ObjectRef The URL to the object. This is not required if the notificationEventType is 2 (DELETE).
+	ObjectRef *string `json:"objectRef,omitempty"`
+}
+
+// ResourceChangeNotificationNotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
+type ResourceChangeNotificationNotificationEventType int
+
 // ResourceInfo Information about a resource.
 type ResourceInfo struct {
 	// AdminState The administrative state of the resource
@@ -178,6 +207,32 @@ type ResourcePoolInfo struct {
 	// SiteId Identifier for the location of the resource pool.
 	SiteId *string `json:"siteId,omitempty"`
 }
+
+// Subscription Information about an inventory subscription.
+type Subscription struct {
+	// Callback The fully qualified URI to a consumer procedure which can process a Post of the
+	// ResourceChangeNotification.
+	Callback string `json:"callback"`
+
+	// ConsumerSubscriptionId Identifier for the consumer of events sent due to the Subscription request.
+	ConsumerSubscriptionId *openapi_types.UUID `json:"consumerSubscriptionId,omitempty"`
+
+	// Filter Criteria for events which do not need to be reported or will be filtered by the subscription
+	// notification service. Therefore, if a filter is not provided then all events are reported.
+	Filter *string `json:"filter,omitempty"`
+
+	// SubscriptionId Identifier for the Subscription. This identifier is allocated by the Hardware Manager.
+	SubscriptionId *openapi_types.UUID `json:"subscriptionId,omitempty"`
+}
+
+// HwMgrId defines model for hwMgrId.
+type HwMgrId = string
+
+// SubscriptionId defines model for subscriptionId.
+type SubscriptionId = openapi_types.UUID
+
+// CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
+type CreateSubscriptionJSONRequestBody = Subscription
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -259,19 +314,33 @@ type ClientInterface interface {
 	GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourcePools request
-	GetResourcePools(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetResourcePools(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourcePool request
-	GetResourcePool(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetResourcePool(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourcePoolResources request
-	GetResourcePoolResources(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetResourcePoolResources(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResources request
-	GetResources(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetResources(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResource request
-	GetResource(ctx context.Context, hwMgrId string, resourceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetResource(ctx context.Context, hwMgrId HwMgrId, resourceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSubscriptions request
+	GetSubscriptions(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSubscriptionWithBody request with any body
+	CreateSubscriptionWithBody(ctx context.Context, hwMgrId HwMgrId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSubscription(ctx context.Context, hwMgrId HwMgrId, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSubscription request
+	DeleteSubscription(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSubscription request
+	GetSubscription(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -298,7 +367,7 @@ func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEdit
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourcePools(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetResourcePools(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcePoolsRequest(c.Server, hwMgrId)
 	if err != nil {
 		return nil, err
@@ -310,7 +379,7 @@ func (c *Client) GetResourcePools(ctx context.Context, hwMgrId string, reqEditor
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourcePool(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetResourcePool(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcePoolRequest(c.Server, hwMgrId, resourcePoolId)
 	if err != nil {
 		return nil, err
@@ -322,7 +391,7 @@ func (c *Client) GetResourcePool(ctx context.Context, hwMgrId string, resourcePo
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourcePoolResources(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetResourcePoolResources(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcePoolResourcesRequest(c.Server, hwMgrId, resourcePoolId)
 	if err != nil {
 		return nil, err
@@ -334,7 +403,7 @@ func (c *Client) GetResourcePoolResources(ctx context.Context, hwMgrId string, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResources(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetResources(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcesRequest(c.Server, hwMgrId)
 	if err != nil {
 		return nil, err
@@ -346,8 +415,68 @@ func (c *Client) GetResources(ctx context.Context, hwMgrId string, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResource(ctx context.Context, hwMgrId string, resourceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetResource(ctx context.Context, hwMgrId HwMgrId, resourceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourceRequest(c.Server, hwMgrId, resourceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSubscriptions(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSubscriptionsRequest(c.Server, hwMgrId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSubscriptionWithBody(ctx context.Context, hwMgrId HwMgrId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSubscriptionRequestWithBody(c.Server, hwMgrId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSubscription(ctx context.Context, hwMgrId HwMgrId, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSubscriptionRequest(c.Server, hwMgrId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteSubscription(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSubscriptionRequest(c.Server, hwMgrId, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSubscription(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSubscriptionRequest(c.Server, hwMgrId, subscriptionId)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +542,7 @@ func NewGetMinorVersionsRequest(server string) (*http.Request, error) {
 }
 
 // NewGetResourcePoolsRequest generates requests for GetResourcePools
-func NewGetResourcePoolsRequest(server string, hwMgrId string) (*http.Request, error) {
+func NewGetResourcePoolsRequest(server string, hwMgrId HwMgrId) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -447,7 +576,7 @@ func NewGetResourcePoolsRequest(server string, hwMgrId string) (*http.Request, e
 }
 
 // NewGetResourcePoolRequest generates requests for GetResourcePool
-func NewGetResourcePoolRequest(server string, hwMgrId string, resourcePoolId string) (*http.Request, error) {
+func NewGetResourcePoolRequest(server string, hwMgrId HwMgrId, resourcePoolId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -488,7 +617,7 @@ func NewGetResourcePoolRequest(server string, hwMgrId string, resourcePoolId str
 }
 
 // NewGetResourcePoolResourcesRequest generates requests for GetResourcePoolResources
-func NewGetResourcePoolResourcesRequest(server string, hwMgrId string, resourcePoolId string) (*http.Request, error) {
+func NewGetResourcePoolResourcesRequest(server string, hwMgrId HwMgrId, resourcePoolId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -529,7 +658,7 @@ func NewGetResourcePoolResourcesRequest(server string, hwMgrId string, resourceP
 }
 
 // NewGetResourcesRequest generates requests for GetResources
-func NewGetResourcesRequest(server string, hwMgrId string) (*http.Request, error) {
+func NewGetResourcesRequest(server string, hwMgrId HwMgrId) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -563,7 +692,7 @@ func NewGetResourcesRequest(server string, hwMgrId string) (*http.Request, error
 }
 
 // NewGetResourceRequest generates requests for GetResource
-func NewGetResourceRequest(server string, hwMgrId string, resourceId string) (*http.Request, error) {
+func NewGetResourceRequest(server string, hwMgrId HwMgrId, resourceId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -586,6 +715,169 @@ func NewGetResourceRequest(server string, hwMgrId string, resourceId string) (*h
 	}
 
 	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/manager/%s/resources/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSubscriptionsRequest generates requests for GetSubscriptions
+func NewGetSubscriptionsRequest(server string, hwMgrId HwMgrId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "hwMgrId", runtime.ParamLocationPath, hwMgrId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/manager/%s/subscriptions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateSubscriptionRequest calls the generic CreateSubscription builder with application/json body
+func NewCreateSubscriptionRequest(server string, hwMgrId HwMgrId, body CreateSubscriptionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSubscriptionRequestWithBody(server, hwMgrId, "application/json", bodyReader)
+}
+
+// NewCreateSubscriptionRequestWithBody generates requests for CreateSubscription with any type of body
+func NewCreateSubscriptionRequestWithBody(server string, hwMgrId HwMgrId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "hwMgrId", runtime.ParamLocationPath, hwMgrId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/manager/%s/subscriptions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteSubscriptionRequest generates requests for DeleteSubscription
+func NewDeleteSubscriptionRequest(server string, hwMgrId HwMgrId, subscriptionId SubscriptionId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "hwMgrId", runtime.ParamLocationPath, hwMgrId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "subscriptionId", runtime.ParamLocationPath, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/manager/%s/subscriptions/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSubscriptionRequest generates requests for GetSubscription
+func NewGetSubscriptionRequest(server string, hwMgrId HwMgrId, subscriptionId SubscriptionId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "hwMgrId", runtime.ParamLocationPath, hwMgrId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "subscriptionId", runtime.ParamLocationPath, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/manager/%s/subscriptions/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -653,19 +945,33 @@ type ClientWithResponsesInterface interface {
 	GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error)
 
 	// GetResourcePoolsWithResponse request
-	GetResourcePoolsWithResponse(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error)
+	GetResourcePoolsWithResponse(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error)
 
 	// GetResourcePoolWithResponse request
-	GetResourcePoolWithResponse(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error)
+	GetResourcePoolWithResponse(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error)
 
 	// GetResourcePoolResourcesWithResponse request
-	GetResourcePoolResourcesWithResponse(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResourcesResponse, error)
+	GetResourcePoolResourcesWithResponse(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResourcesResponse, error)
 
 	// GetResourcesWithResponse request
-	GetResourcesWithResponse(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error)
+	GetResourcesWithResponse(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error)
 
 	// GetResourceWithResponse request
-	GetResourceWithResponse(ctx context.Context, hwMgrId string, resourceId string, reqEditors ...RequestEditorFn) (*GetResourceResponse, error)
+	GetResourceWithResponse(ctx context.Context, hwMgrId HwMgrId, resourceId string, reqEditors ...RequestEditorFn) (*GetResourceResponse, error)
+
+	// GetSubscriptionsWithResponse request
+	GetSubscriptionsWithResponse(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error)
+
+	// CreateSubscriptionWithBodyWithResponse request with any body
+	CreateSubscriptionWithBodyWithResponse(ctx context.Context, hwMgrId HwMgrId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
+
+	CreateSubscriptionWithResponse(ctx context.Context, hwMgrId HwMgrId, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
+
+	// DeleteSubscriptionWithResponse request
+	DeleteSubscriptionWithResponse(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error)
+
+	// GetSubscriptionWithResponse request
+	GetSubscriptionWithResponse(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error)
 }
 
 type GetAllVersionsResponse struct {
@@ -843,6 +1149,103 @@ func (r GetResourceResponse) StatusCode() int {
 	return 0
 }
 
+type GetSubscriptionsResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *[]Subscription
+	ApplicationProblemJSON400 *ProblemDetails
+	ApplicationProblemJSON401 *ProblemDetails
+	ApplicationProblemJSON403 *ProblemDetails
+	ApplicationProblemJSON500 *ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSubscriptionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSubscriptionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSubscriptionResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON201                   *Subscription
+	ApplicationProblemJSON400 *ProblemDetails
+	ApplicationProblemJSON500 *ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteSubscriptionResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	ApplicationProblemJSON404 *ProblemDetails
+	ApplicationProblemJSON500 *ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSubscriptionResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *Subscription
+	ApplicationProblemJSON400 *ProblemDetails
+	ApplicationProblemJSON500 *ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // GetAllVersionsWithResponse request returning *GetAllVersionsResponse
 func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error) {
 	rsp, err := c.GetAllVersions(ctx, reqEditors...)
@@ -862,7 +1265,7 @@ func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, 
 }
 
 // GetResourcePoolsWithResponse request returning *GetResourcePoolsResponse
-func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error) {
+func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error) {
 	rsp, err := c.GetResourcePools(ctx, hwMgrId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -871,7 +1274,7 @@ func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, 
 }
 
 // GetResourcePoolWithResponse request returning *GetResourcePoolResponse
-func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error) {
+func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error) {
 	rsp, err := c.GetResourcePool(ctx, hwMgrId, resourcePoolId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -880,7 +1283,7 @@ func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, h
 }
 
 // GetResourcePoolResourcesWithResponse request returning *GetResourcePoolResourcesResponse
-func (c *ClientWithResponses) GetResourcePoolResourcesWithResponse(ctx context.Context, hwMgrId string, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResourcesResponse, error) {
+func (c *ClientWithResponses) GetResourcePoolResourcesWithResponse(ctx context.Context, hwMgrId HwMgrId, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResourcesResponse, error) {
 	rsp, err := c.GetResourcePoolResources(ctx, hwMgrId, resourcePoolId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -889,7 +1292,7 @@ func (c *ClientWithResponses) GetResourcePoolResourcesWithResponse(ctx context.C
 }
 
 // GetResourcesWithResponse request returning *GetResourcesResponse
-func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, hwMgrId string, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error) {
+func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error) {
 	rsp, err := c.GetResources(ctx, hwMgrId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -898,12 +1301,56 @@ func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, hwMg
 }
 
 // GetResourceWithResponse request returning *GetResourceResponse
-func (c *ClientWithResponses) GetResourceWithResponse(ctx context.Context, hwMgrId string, resourceId string, reqEditors ...RequestEditorFn) (*GetResourceResponse, error) {
+func (c *ClientWithResponses) GetResourceWithResponse(ctx context.Context, hwMgrId HwMgrId, resourceId string, reqEditors ...RequestEditorFn) (*GetResourceResponse, error) {
 	rsp, err := c.GetResource(ctx, hwMgrId, resourceId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetResourceResponse(rsp)
+}
+
+// GetSubscriptionsWithResponse request returning *GetSubscriptionsResponse
+func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, hwMgrId HwMgrId, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error) {
+	rsp, err := c.GetSubscriptions(ctx, hwMgrId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSubscriptionsResponse(rsp)
+}
+
+// CreateSubscriptionWithBodyWithResponse request with arbitrary body returning *CreateSubscriptionResponse
+func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context.Context, hwMgrId HwMgrId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
+	rsp, err := c.CreateSubscriptionWithBody(ctx, hwMgrId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSubscriptionWithResponse(ctx context.Context, hwMgrId HwMgrId, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
+	rsp, err := c.CreateSubscription(ctx, hwMgrId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSubscriptionResponse(rsp)
+}
+
+// DeleteSubscriptionWithResponse request returning *DeleteSubscriptionResponse
+func (c *ClientWithResponses) DeleteSubscriptionWithResponse(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error) {
+	rsp, err := c.DeleteSubscription(ctx, hwMgrId, subscriptionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSubscriptionResponse(rsp)
+}
+
+// GetSubscriptionWithResponse request returning *GetSubscriptionResponse
+func (c *ClientWithResponses) GetSubscriptionWithResponse(ctx context.Context, hwMgrId HwMgrId, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error) {
+	rsp, err := c.GetSubscription(ctx, hwMgrId, subscriptionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSubscriptionResponse(rsp)
 }
 
 // ParseGetAllVersionsResponse parses an HTTP response from a GetAllVersionsWithResponse call
@@ -1235,47 +1682,226 @@ func ParseGetResourceResponse(rsp *http.Response) (*GetResourceResponse, error) 
 	return response, nil
 }
 
+// ParseGetSubscriptionsResponse parses an HTTP response from a GetSubscriptionsWithResponse call
+func ParseGetSubscriptionsResponse(rsp *http.Response) (*GetSubscriptionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSubscriptionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Subscription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSubscriptionResponse parses an HTTP response from a CreateSubscriptionWithResponse call
+func ParseCreateSubscriptionResponse(rsp *http.Response) (*CreateSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Subscription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSubscriptionResponse parses an HTTP response from a DeleteSubscriptionWithResponse call
+func ParseDeleteSubscriptionResponse(rsp *http.Response) (*DeleteSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSubscriptionResponse parses an HTTP response from a GetSubscriptionWithResponse call
+func ParseGetSubscriptionResponse(rsp *http.Response) (*GetSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Subscription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
