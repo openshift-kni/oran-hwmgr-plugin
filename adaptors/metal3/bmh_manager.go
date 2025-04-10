@@ -123,15 +123,16 @@ func (a *Adaptor) FetchBMHList(ctx context.Context, site, poolID string, allocat
 
 	var bmhList metal3v1alpha1.BareMetalHostList
 	opts := []client.ListOption{}
+	matchingLabels := make(client.MatchingLabels)
 
 	// Add site ID filter if provided
 	if site != "" {
-		opts = append(opts, client.MatchingLabels{LabelSiteID: site})
+		matchingLabels[LabelSiteID] = site
 	}
 
 	// Add pool ID filter if provided
 	if poolID != "" {
-		opts = append(opts, client.MatchingLabels{LabelResourcePoolID: poolID})
+		matchingLabels[LabelResourcePoolID] = poolID
 	}
 
 	// Add namespace filter if provided
@@ -143,7 +144,7 @@ func (a *Adaptor) FetchBMHList(ctx context.Context, site, poolID string, allocat
 	switch allocationStatus {
 	case AllocatedBMHs:
 		// Fetch only allocated BMHs
-		opts = append(opts, client.MatchingLabels{BmhAllocatedLabel: LabelValueTrue})
+		matchingLabels[BmhAllocatedLabel] = LabelValueTrue
 
 	case UnallocatedBMHs:
 		// Fetch only unallocated BMHs
@@ -165,6 +166,8 @@ func (a *Adaptor) FetchBMHList(ctx context.Context, site, poolID string, allocat
 	case AllBMHs:
 		// fetch all BMHs
 	}
+
+	opts = append(opts, matchingLabels)
 
 	// Fetch BMHs based on filters
 	if err := a.Client.List(ctx, &bmhList, opts...); err != nil {
