@@ -8,6 +8,7 @@ package metal3
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -118,7 +119,11 @@ func (a *Adaptor) updateBMHLabelWithRetry(ctx context.Context, name types.Namesp
 }
 
 // FetchBMHList retrieves BareMetalHosts filtered by site ID, allocation status, and optional namespace.
-func (a *Adaptor) FetchBMHList(ctx context.Context, site, poolID string, allocationStatus BMHAllocationStatus,
+func (a *Adaptor) FetchBMHList(
+	ctx context.Context,
+	site string,
+	nodePoolData hwmgmtv1alpha1.NodePoolData,
+	allocationStatus BMHAllocationStatus,
 	namespace string) (metal3v1alpha1.BareMetalHostList, error) {
 
 	var bmhList metal3v1alpha1.BareMetalHostList
@@ -131,8 +136,25 @@ func (a *Adaptor) FetchBMHList(ctx context.Context, site, poolID string, allocat
 	}
 
 	// Add pool ID filter if provided
-	if poolID != "" {
-		matchingLabels[LabelResourcePoolID] = poolID
+	if nodePoolData.ResourcePoolId != "" {
+		matchingLabels[LabelResourcePoolID] = nodePoolData.ResourcePoolId
+	}
+
+	if nodePoolData.ResourceSelector != "" {
+		resourceSelectors := make(map[string]string)
+
+		if err := json.Unmarshal([]byte(nodePoolData.ResourceSelector), &resourceSelectors); err != nil {
+			return bmhList, fmt.Errorf("unable to parse resourceSelector: %s: %w", nodePoolData.ResourceSelector, err)
+		}
+
+		for key, value := range resourceSelectors {
+			fullLabelName := key
+			if !REPatternResourceSelectorLabel.MatchString(fullLabelName) {
+				fullLabelName = LabelPrefixResourceSelector + key
+			}
+
+			matchingLabels[fullLabelName] = value
+		}
 	}
 
 	// Add namespace filter if provided

@@ -37,14 +37,14 @@ func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh *metal3v1alpha1
 
 	nodepool.Status.Properties.NodeNames = append(nodepool.Status.Properties.NodeNames, nodeName)
 
-	bmhInteface := a.buildInterfacesFromBMH(nodepool, *bmh)
+	bmhInterface := a.buildInterfacesFromBMH(nodepool, *bmh)
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodePoolData.ResourcePoolId,
 		BMC: &bmhBmcInfo{
 			Address:         bmh.Spec.BMC.Address,
 			CredentialsName: bmh.Spec.BMC.CredentialsName,
 		},
-		Interfaces: bmhInteface,
+		Interfaces: bmhInterface,
 	}
 	updating, err := a.processHwProfile(ctx, bmh, nodeName)
 	if err != nil {
@@ -82,15 +82,15 @@ func (a *Adaptor) ProcessNodePoolAllocation(ctx context.Context, nodepool *hwmgm
 		}
 
 		// Retrieve only unallocated BMHs for the current site, resourcePoolId, and namespace
-		unallocatedBMHs, err := a.FetchBMHList(ctx, nodepool.Spec.Site, nodeGroup.NodePoolData.ResourcePoolId, UnallocatedBMHs, bmhNamespace)
+		unallocatedBMHs, err := a.FetchBMHList(ctx, nodepool.Spec.Site, nodeGroup.NodePoolData, UnallocatedBMHs, bmhNamespace)
 		if err != nil {
-			return fmt.Errorf("unable to fetch unallocated BMHs for site %s, poolID %s: %w",
-				nodepool.Spec.Site, nodeGroup.NodePoolData.ResourcePoolId, err)
+			return fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
+				nodepool.Spec.Site, nodeGroup.NodePoolData.Name, err)
 		}
 
 		if len(unallocatedBMHs.Items) == 0 {
-			return fmt.Errorf("no available nodes for site %s, poolID %s",
-				nodepool.Spec.Site, nodeGroup.NodePoolData.ResourcePoolId)
+			return fmt.Errorf("no available nodes for site=%s, nodegroup=%s",
+				nodepool.Spec.Site, nodeGroup.NodePoolData.Name)
 		}
 
 		// Calculate pending nodes for the group
@@ -154,12 +154,10 @@ func (a *Adaptor) getNodePoolBMHNamespace(ctx context.Context, nodepool *hwmgmtv
 			continue // Skip groups with size 0
 		}
 
-		resourcePoolId := nodeGroup.NodePoolData.ResourcePoolId
-
 		// Fetch only allocated BMHs that match site and resourcePoolId
-		bmhList, err := a.FetchBMHList(ctx, nodepool.Spec.Site, resourcePoolId, AllocatedBMHs, "")
+		bmhList, err := a.FetchBMHList(ctx, nodepool.Spec.Site, nodeGroup.NodePoolData, AllocatedBMHs, "")
 		if err != nil {
-			return "", fmt.Errorf("unable to fetch allocated BMHs for resource pool %s: %w", resourcePoolId, err)
+			return "", fmt.Errorf("unable to fetch allocated BMHs for nodegroup=%s: %w", nodeGroup.NodePoolData.Name, err)
 		}
 
 		// Return the namespace of the first allocated BMH and stop searching

@@ -26,6 +26,9 @@ const (
 // The following regex pattern is used to find interface labels
 var REPatternInterfaceLabel = regexp.MustCompile(`^` + LabelPrefixInterfaces + `(.*)`)
 
+// The following regex pattern is used to check resourceselector label pattern
+var REPatternResourceSelectorLabel = regexp.MustCompile(`^` + LabelPrefixResourceSelector)
+
 var emptyString = ""
 
 func getResourceInfoAdminState(bmh metal3v1alpha1.BareMetalHost) invserver.ResourceInfoAdminState {

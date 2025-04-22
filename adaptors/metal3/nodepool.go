@@ -125,18 +125,16 @@ func (a *Adaptor) ProcessNewNodePool(ctx context.Context,
 			continue // Skip groups with size 0
 		}
 
-		resourcePoolId := nodeGroup.NodePoolData.ResourcePoolId
-
 		// Fetch unallocated BMHs for the specific site and poolID
-		bmhListForGroup, err := a.FetchBMHList(ctx, nodepool.Spec.Site, resourcePoolId, UnallocatedBMHs, "")
+		bmhListForGroup, err := a.FetchBMHList(ctx, nodepool.Spec.Site, nodeGroup.NodePoolData, UnallocatedBMHs, "")
 		if err != nil {
-			return fmt.Errorf("unable to fetch BMHs for resource pool %s: %w", resourcePoolId, err)
+			return fmt.Errorf("unable to fetch BMHs for nodegroup=%s: %w", nodeGroup.NodePoolData.Name, err)
 		}
 
 		// Ensure enough resources exist in the requested pool
 		if len(bmhListForGroup.Items) < nodeGroup.Size {
-			return fmt.Errorf("not enough free resources in resource pool %s: freenodes=%d, required=%d",
-				resourcePoolId, len(bmhListForGroup.Items), nodeGroup.Size)
+			return fmt.Errorf("not enough free resources matching nodegroup=%s criteria: freenodes=%d, required=%d",
+				nodeGroup.NodePoolData.Name, len(bmhListForGroup.Items), nodeGroup.Size)
 		}
 	}
 
