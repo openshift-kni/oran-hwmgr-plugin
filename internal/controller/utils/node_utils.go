@@ -116,3 +116,14 @@ func FindNodeInProgress(nodelist *hwmgmtv1alpha1.NodeList) *hwmgmtv1alpha1.Node 
 
 	return nil
 }
+
+// FindNodeConfigInProgress scans the nodelist to find the first node with config-in-progress annotation
+func FindNodeConfigInProgress(nodelist *hwmgmtv1alpha1.NodeList) *hwmgmtv1alpha1.Node {
+	for _, node := range nodelist.Items {
+		if GetConfigAnnotation(&node) != "" {
+			return &node
+		}
+	}
+
+	return nil
+}

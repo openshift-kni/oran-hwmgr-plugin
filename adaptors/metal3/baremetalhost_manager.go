@@ -35,6 +35,10 @@ const (
 )
 
 const (
+	BmhDay2ConfigAnnotation        = "bmac.agent-install.openshift.io/day2-configuration-status"
+	BmhDetachedAnnotation          = "baremetalhost.metal3.io/detached"
+	BmhPausedAnnotation            = "baremetalhost.metal3.io/paused"
+	BmhRebootAnnotation            = "reboot.metal3.io"
 	BiosUpdateNeededAnnotation     = "hwmgr-plugin.oran.openshift.io/bios-update-needed"
 	FirmwareUpdateNeededAnnotation = "hwmgr-plugin.oran.openshift.io/firmware-update-needed"
 	BmhNamespaceLabel              = "baremetalhost.metal3.io/namespace"
@@ -42,9 +46,11 @@ const (
 	Metal3Finalizer                = "preprovisioningimage.metal3.io"
 	UpdateReasonBIOSSettings       = "bios-settings-update"
 	UpdateReasonFirmware           = "firmware-update"
-	LabelValueTrue                 = "true"
-	LabelOpAdd                     = "add"
-	LabelOpRemove                  = "remove"
+	ValueTrue                      = "true"
+	MetaTypeLabel                  = "label"
+	MetaTypeAnnotation             = "annotation"
+	OpAdd                          = "add"
+	OpRemove                       = "remove"
 )
 
 // Struct definitions for the nodelist configmap
@@ -59,29 +65,49 @@ type bmhNodeInfo struct {
 	Interfaces     []*hwmgmtv1alpha1.Interface `json:"interfaces,omitempty"`
 }
 
-func (a *Adaptor) updateBMHLabelWithRetry(ctx context.Context, name types.NamespacedName, labelKey, labelValue, operation string) error {
+func (a *Adaptor) updateBMHMetaWithRetry(
+	ctx context.Context,
+	name types.NamespacedName,
+	metaType string, // "label" or "annotation"
+	key, value, operation string,
+) error {
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := a.Client.Get(ctx, name, &latestBMH); err != nil {
-			a.Logger.ErrorContext(ctx, "Failed to fetch BMH for label update",
+			a.Logger.ErrorContext(ctx, "Failed to fetch BMH for "+metaType+" update",
 				slog.Any("bmh", name),
 				slog.String("error", err.Error()))
 			return err
 		}
 
-		// Early return for no-op remove
-		if operation == LabelOpRemove {
-			if latestBMH.Labels == nil {
-				a.Logger.InfoContext(ctx, "BMH has no labels, skipping remove operation",
+		var targetMap map[string]string
+		switch metaType {
+		case MetaTypeLabel:
+			if latestBMH.Labels == nil && operation == OpAdd {
+				latestBMH.Labels = make(map[string]string)
+			}
+			targetMap = latestBMH.Labels
+		case MetaTypeAnnotation:
+			if latestBMH.Annotations == nil && operation == OpAdd {
+				latestBMH.Annotations = make(map[string]string)
+			}
+			targetMap = latestBMH.Annotations
+		default:
+			return fmt.Errorf("unsupported meta type: %s", metaType)
+		}
+
+		if operation == OpRemove {
+			if targetMap == nil {
+				a.Logger.InfoContext(ctx, fmt.Sprintf("BMH has no %ss, skipping remove operation", metaType),
 					slog.Any("bmh", name))
 				return nil
 			}
-			if _, exists := latestBMH.Labels[labelKey]; !exists {
-				a.Logger.InfoContext(ctx, "Label not present, skipping remove operation",
+			if _, exists := targetMap[key]; !exists {
+				a.Logger.InfoContext(ctx, fmt.Sprintf("%s not present, skipping remove operation", metaType),
 					slog.Any("bmh", name),
-					slog.String("label", labelKey))
+					slog.String(metaType, key))
 				return nil
 			}
 		}
@@ -89,29 +115,25 @@ func (a *Adaptor) updateBMHLabelWithRetry(ctx context.Context, name types.Namesp
 		// Create a patch base
 		patch := client.MergeFrom(latestBMH.DeepCopy())
 
-		if operation == LabelOpAdd && latestBMH.Labels == nil {
-			latestBMH.Labels = make(map[string]string)
-		}
-
 		switch operation {
-		case LabelOpAdd:
-			latestBMH.Labels[labelKey] = labelValue
-		case LabelOpRemove:
-			delete(latestBMH.Labels, labelKey)
+		case OpAdd:
+			targetMap[key] = value
+		case OpRemove:
+			delete(targetMap, key)
 		default:
 			return fmt.Errorf("unsupported operation: %s", operation)
 		}
 
 		// Apply the patch
 		if err := a.Client.Patch(ctx, &latestBMH, patch); err != nil {
-			a.Logger.ErrorContext(ctx, "Failed to update BMH label",
+			a.Logger.ErrorContext(ctx, "Failed to update BMH "+metaType,
 				slog.String("bmh", name.Name),
 				slog.String("operation", operation),
 				slog.String("error", err.Error()))
-			return fmt.Errorf("failed to %s label on BMH %s: %w", operation, name.Name, err)
+			return fmt.Errorf("failed to %s %s on BMH %s: %w", operation, metaType, name.Name, err)
 		}
 
-		a.Logger.InfoContext(ctx, "Successfully updated BMH label",
+		a.Logger.InfoContext(ctx, "Successfully updated BMH "+metaType,
 			slog.String("bmh", name.Name),
 			slog.String("operation", operation))
 		return nil
@@ -166,7 +188,7 @@ func (a *Adaptor) FetchBMHList(
 	switch allocationStatus {
 	case AllocatedBMHs:
 		// Fetch only allocated BMHs
-		matchingLabels[BmhAllocatedLabel] = LabelValueTrue
+		matchingLabels[BmhAllocatedLabel] = ValueTrue
 
 	case UnallocatedBMHs:
 		// Fetch only unallocated BMHs
@@ -175,7 +197,7 @@ func (a *Adaptor) FetchBMHList(
 				{
 					Key:      BmhAllocatedLabel,
 					Operator: metav1.LabelSelectorOpNotIn,
-					Values:   []string{LabelValueTrue}, // Exclude allocated=true
+					Values:   []string{ValueTrue}, // Exclude allocated=true
 				},
 			},
 		}
@@ -281,7 +303,7 @@ func (a *Adaptor) countNodesInGroup(ctx context.Context, nodeNames []string, gro
 }
 
 func (a *Adaptor) isBMHAllocated(bmh *metal3v1alpha1.BareMetalHost) bool {
-	if currentValue, exists := bmh.Labels[BmhAllocatedLabel]; exists && currentValue == LabelValueTrue {
+	if currentValue, exists := bmh.Labels[BmhAllocatedLabel]; exists && currentValue == ValueTrue {
 		return true
 	}
 	return false
@@ -303,8 +325,57 @@ func (a *Adaptor) clearBMHNetworkData(ctx context.Context, name types.Namespaced
 	})
 }
 
-func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, nodeName string) (bool, error) {
+func (a *Adaptor) applyPreChangeAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		var latestBMH metal3v1alpha1.BareMetalHost
+		if err := a.Client.Get(ctx, bmhName, &latestBMH); err != nil {
+			a.Logger.ErrorContext(ctx, "Failed to fetch BMH for pre-change annotation update",
+				slog.Any("BMH", bmhName),
+				slog.String("error", err.Error()))
+			return err
+		}
 
+		patchBase := latestBMH.DeepCopy()
+
+		if latestBMH.Annotations == nil {
+			latestBMH.Annotations = make(map[string]string)
+		}
+
+		// 1. Remove the detached annotation.
+		delete(latestBMH.Annotations, BmhDetachedAnnotation)
+		// 2. Remove the paused annotation
+		delete(latestBMH.Annotations, BmhPausedAnnotation)
+		// 3. Set the Day2 config annotation to "in-progress".
+		latestBMH.Annotations[BmhDay2ConfigAnnotation] = "in-progress"
+		// 4. Add the reboot annotation.
+		latestBMH.Annotations[BmhRebootAnnotation] = ""
+
+		patch := client.MergeFrom(patchBase)
+
+		if err := a.Client.Patch(ctx, &latestBMH, patch); err != nil {
+			a.Logger.ErrorContext(ctx, "Failed to update BMH annotations in pre-change update",
+				slog.String("BMH", bmhName.Name),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to patch annotations on BMH %+v: %w", bmhName, err)
+		}
+
+		a.Logger.InfoContext(ctx, "Successfully applied pre-change annotations to BMH",
+			slog.Any("BMH", bmhName))
+		return nil
+	})
+}
+
+func (a *Adaptor) applyPostChangeAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	if err := a.updateBMHMetaWithRetry(ctx, bmhName, "annotation", BmhDay2ConfigAnnotation, "", OpRemove); err != nil {
+		return fmt.Errorf("failed to remove %s BMH %+v: %w", BmhDetachedAnnotation, bmhName, err)
+	}
+	return nil
+}
+
+func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, nodeName string, postInstall bool) (bool, error) {
 	node, err := utils.GetNode(ctx, a.Logger, a.Client, a.Namespace, nodeName)
 	if err != nil {
 		return false, fmt.Errorf("failed to get node %s/%s: %w", a.Namespace, nodeName, err)
@@ -321,9 +392,9 @@ func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.Bare
 	}
 
 	// Check if BIOS update is required
-	updateRequired := false
+	biosUpdateRequired := false
 	if hwProfile.Spec.Bios.Attributes != nil {
-		updateRequired, err = a.IsBiosUpdateRequired(ctx, bmh, hwProfile.Spec.Bios)
+		biosUpdateRequired, err = a.IsBiosUpdateRequired(ctx, bmh, hwProfile.Spec.Bios)
 		if err != nil {
 			return false, err
 		}
@@ -335,25 +406,33 @@ func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.Bare
 		return false, err
 	}
 
+	// If nothing is required, return early
+	if !biosUpdateRequired && !firmwareUpdateRequired {
+		return false, nil
+	}
+
+	if postInstall {
+		if err = a.createOrUpdateHostUpdatePolicy(ctx, bmh, firmwareUpdateRequired, biosUpdateRequired); err != nil {
+			return true, fmt.Errorf("failed create or update  HostUpdatePolicy%s/%s: %w", bmh.Namespace, bmh.Name, err)
+		}
+	}
+
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// If bios update is required, annotate BMH
-	if updateRequired {
-		if err := a.addBMHAnnotation(ctx, bmh, BiosUpdateNeededAnnotation); err != nil {
+	if biosUpdateRequired {
+		if err := a.updateBMHMetaWithRetry(ctx, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, ValueTrue, OpAdd); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
-		return true, nil
 	}
 
 	// if firmware update is required, annotate BMH
 	if firmwareUpdateRequired {
-		if err := a.addBMHAnnotation(ctx, bmh, FirmwareUpdateNeededAnnotation); err != nil {
+		if err := a.updateBMHMetaWithRetry(ctx, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, ValueTrue, OpAdd); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
-		return true, nil
 	}
 
-	// No update required
-	return false, nil
-
+	return true, nil
 }
 
 func (a *Adaptor) checkBMHStatus(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, state metal3v1alpha1.ProvisioningState) bool {
@@ -389,12 +468,16 @@ func (a *Adaptor) annotateNodeConfigInProgress(ctx context.Context, nodeName, re
 	return nil
 }
 
-func (a *Adaptor) handleBMHsTransitioningToPreparing(ctx context.Context, nodelist *hwmgmtv1alpha1.NodeList) (bool, error) {
+func (a *Adaptor) handleTransitionNodes(ctx context.Context, nodelist *hwmgmtv1alpha1.NodeList, postInstall bool) (bool, error) {
 
 	for _, node := range nodelist.Items {
 		bmh, err := a.getBMHForNode(ctx, &node)
 		if err != nil {
 			return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		}
+
+		if bmh.Annotations == nil {
+			bmh.Annotations = make(map[string]string)
 		}
 
 		updateCases := []struct {
@@ -406,45 +489,82 @@ func (a *Adaptor) handleBMHsTransitioningToPreparing(ctx context.Context, nodeli
 			{FirmwareUpdateNeededAnnotation, UpdateReasonFirmware, "firmware"},
 		}
 
+		// Process each update case for the current BMH.
 		for _, uc := range updateCases {
-			_, updateNeeded := bmh.Annotations[uc.AnnotationKey]
-			if !updateNeeded {
+			if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 				continue
 			}
 
-			if bmh.Status.Provisioning.State != metal3v1alpha1.StatePreparing {
-				a.Logger.InfoContext(ctx, "BMH is not in 'Preparing' state yet, requeuing",
-					slog.String("BMH", bmh.Name))
-				return true, nil
-			}
-
-			a.Logger.InfoContext(ctx, fmt.Sprintf("BMH transitioned to 'Preparing' state for %s update", uc.LogLabel),
-				slog.String("BMH", bmh.Name))
-
-			// Remove the update-needed annotation
-			if err := a.removeBMHAnnotation(ctx, bmh, uc.AnnotationKey); err != nil {
+			if err := a.processBMHUpdateCase(ctx, &node, bmh, uc, postInstall); err != nil {
 				return true, err
 			}
-
-			// Only annotate in-progress if not already set
-			if utils.GetConfigAnnotation(&node) == "" {
-				if err := a.annotateNodeConfigInProgress(ctx, node.Name, uc.Reason); err != nil {
-					a.Logger.ErrorContext(ctx, fmt.Sprintf("Failed to annotate %s update in progress", uc.LogLabel),
-						slog.String("error", err.Error()))
-					return true, err
-				}
-				a.Logger.InfoContext(ctx, fmt.Sprintf("BMH %s update initiated", uc.LogLabel),
-					slog.String("BMH", bmh.Name))
-			} else {
-				a.Logger.InfoContext(ctx, "Skipping annotation; another config already in progress",
-					slog.String("BMH", bmh.Name),
-					slog.String("skipped", uc.Reason))
-			}
-
 			return true, nil
 		}
 	}
+
 	return false, nil
+}
+
+// processBMHUpdateCase handles the update for a given BMH and update case.
+func (a *Adaptor) processBMHUpdateCase(ctx context.Context, node *hwmgmtv1alpha1.Node, bmh *metal3v1alpha1.BareMetalHost,
+	uc struct {
+		AnnotationKey string
+		Reason        string
+		LogLabel      string
+	}, postInstall bool) error {
+
+	// Check whether the current state of the BMH meets the transition condition.
+	if postInstall {
+		if bmh.Status.OperationalStatus != metal3v1alpha1.OperationalStatusServicing {
+			a.Logger.InfoContext(ctx,
+				"BMH not in 'Servicing' state yet, requeuing",
+				slog.String("BMH", bmh.Name),
+				slog.String("expected", string(metal3v1alpha1.OperationalStatusServicing)),
+				slog.String("current", string(bmh.Status.OperationalStatus)))
+			return nil
+		}
+		a.Logger.InfoContext(ctx,
+			fmt.Sprintf("BMH transitioned to 'Servicing' state for %s update", uc.LogLabel),
+			slog.String("BMH", bmh.Name))
+	} else {
+		if bmh.Status.Provisioning.State != metal3v1alpha1.StatePreparing {
+			a.Logger.InfoContext(ctx,
+				"BMH not in 'Preparing' state yet, requeuing",
+				slog.String("BMH", bmh.Name),
+				slog.String("expected", string(metal3v1alpha1.StatePreparing)),
+				slog.String("current", string(bmh.Status.Provisioning.State)))
+			return nil
+		}
+		a.Logger.InfoContext(ctx,
+			fmt.Sprintf("BMH transitioned to 'Preparing' state for %s update", uc.LogLabel),
+			slog.String("BMH", bmh.Name))
+	}
+
+	// Remove the update-needed annotation from the BMH.
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	if err := a.updateBMHMetaWithRetry(ctx, bmhName, MetaTypeAnnotation, uc.AnnotationKey, "", OpRemove); err != nil {
+		return fmt.Errorf("failed to remove annotation %s from BMH %s: %w", uc.AnnotationKey, bmh.Name, err)
+	}
+
+	// Only add the in-progress annotation if the node is not already annotated.
+	if utils.GetConfigAnnotation(node) == "" {
+		if err := a.annotateNodeConfigInProgress(ctx, node.Name, uc.Reason); err != nil {
+			a.Logger.ErrorContext(ctx,
+				fmt.Sprintf("Failed to annotate %s update in progress", uc.LogLabel),
+				slog.String("error", err.Error()))
+			return err
+		}
+		a.Logger.InfoContext(ctx,
+			fmt.Sprintf("BMH %s update initiated", uc.LogLabel),
+			slog.String("BMH", bmh.Name))
+	} else {
+		a.Logger.InfoContext(ctx,
+			"Skipping annotation; another config already in progress",
+			slog.String("BMH", bmh.Name),
+			slog.String("skipped", uc.Reason))
+	}
+
+	return nil
 }
 
 func (a *Adaptor) handleBMHCompletion(ctx context.Context, nodelist *hwmgmtv1alpha1.NodeList) (bool, error) {
@@ -485,7 +605,7 @@ func (a *Adaptor) checkForPendingUpdate(ctx context.Context, nodepool *hwmgmtv1a
 	}
 
 	// Process BMHs transitioning to "Preparing"
-	updating, err := a.handleBMHsTransitioningToPreparing(ctx, nodelist)
+	updating, err := a.handleTransitionNodes(ctx, nodelist, false)
 	if err != nil {
 		return updating, err
 	}
@@ -517,32 +637,6 @@ func (a *Adaptor) getBMHForNode(ctx context.Context, node *hwmgmtv1alpha1.Node) 
 	return &bmh, nil
 }
 
-func (a *Adaptor) addBMHAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, annotation string) error {
-	bmhPatch := client.MergeFrom(bmh.DeepCopy()) // Create a patch
-	if bmh.Annotations == nil {
-		bmh.Annotations = make(map[string]string)
-	}
-	bmh.Annotations[annotation] = LabelValueTrue
-
-	if err := a.Client.Patch(ctx, bmh, bmhPatch); err != nil {
-		return fmt.Errorf("failed to add '%s' annotate to BMH %s: %w", annotation, bmh.Name, err)
-	}
-
-	a.Logger.InfoContext(ctx, "Added annotatation to BMH", slog.String("BMH", bmh.Name), slog.String("annotation", annotation))
-	return nil
-}
-
-func (a *Adaptor) removeBMHAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, annotation string) error {
-	bmhPatch := client.MergeFrom(bmh.DeepCopy())
-	delete(bmh.Annotations, annotation)
-
-	if err := a.Client.Patch(ctx, bmh, bmhPatch); err != nil {
-		return fmt.Errorf("failed to remove '%s' annotation from BMH %s: %w", annotation, bmh.Name, err)
-	}
-
-	return nil
-}
-
 // markBMHAllocated sets the "allocated" label to "true" on a BareMetalHost.
 func (a *Adaptor) markBMHAllocated(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
 	// Check if the BMH is already allocated to avoid unnecessary patching
@@ -551,13 +645,13 @@ func (a *Adaptor) markBMHAllocated(ctx context.Context, bmh *metal3v1alpha1.Bare
 		return nil // No change needed
 	}
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	return a.updateBMHLabelWithRetry(ctx, name, BmhAllocatedLabel, LabelValueTrue, LabelOpAdd)
+	return a.updateBMHMetaWithRetry(ctx, name, MetaTypeLabel, BmhAllocatedLabel, ValueTrue, OpAdd)
 }
 
 // unmarkBMHAllocated removes the "allocated" label from a BareMetalHost if it exists.
 func (a *Adaptor) unmarkBMHAllocated(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	return a.updateBMHLabelWithRetry(ctx, name, BmhAllocatedLabel, "", LabelOpRemove)
+	return a.updateBMHMetaWithRetry(ctx, name, MetaTypeLabel, BmhAllocatedLabel, "", OpRemove)
 }
 
 // removeMetal3Finalizer removes the Metal3 finalizer from the corresponding PreprovisioningImage resource.

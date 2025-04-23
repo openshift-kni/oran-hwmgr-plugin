@@ -42,6 +42,7 @@ type HardwareManagerReconciler struct {
 //+kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

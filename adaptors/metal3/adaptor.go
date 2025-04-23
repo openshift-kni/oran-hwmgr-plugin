@@ -108,8 +108,7 @@ func (a *Adaptor) HandleNodePool(ctx context.Context, hwmgr *pluginv1alpha1.Hard
 	case NodePoolFSMProcessing:
 		return a.HandleNodePoolProcessing(ctx, hwmgr, nodepool)
 	case NodePoolFSMSpecChanged:
-		a.Logger.InfoContext(ctx, "NodePool spec change request not supported")
-		return result, nil
+		return a.HandleNodePoolSpecChanged(ctx, hwmgr, nodepool)
 	case NodePoolFSMNoop:
 		// Nothing to do
 		return result, nil

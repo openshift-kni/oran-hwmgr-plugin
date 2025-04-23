@@ -46,7 +46,7 @@ func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh *metal3v1alpha1
 		},
 		Interfaces: bmhInterface,
 	}
-	updating, err := a.processHwProfile(ctx, bmh, nodeName)
+	updating, err := a.processHwProfile(ctx, bmh, nodeName, false)
 	if err != nil {
 		return err
 	}

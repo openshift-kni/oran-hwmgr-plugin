@@ -127,6 +127,17 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
+  - hostupdatepolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
   - preprovisioningimages
   verbs:
   - get
