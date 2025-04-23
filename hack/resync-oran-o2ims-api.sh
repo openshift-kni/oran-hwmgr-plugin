@@ -9,16 +9,17 @@ PROG=$(basename $0)
 
 function usage {
     cat <<EOF
-${PROG} [ --branch <branch> ] [ --dev <github username> ]
+${PROG} [ -b <branch> ] [ -d <github username> ]
 
 Options:
-    --branch <branch>           Specify a branch to pull from (default: main)
-    --dev <github username>     Specify a github user for developer replace, for WIP dev
+    -b <branch>           Specify a branch to pull from (default: main)
+    -d <github username>  Specify a github user for developer replace, for WIP dev
 
 For WIP dev work, to resync against the wip-dev-work-x branch in the github.com/myuserid/oran-o2ims fork, run:
 hack/resync-oran-o2ims-api.sh --dev myuserid --branch wip-dev-work-x
 
 EOF
+    exit 1
 }
 
 #
@@ -30,31 +31,16 @@ declare DEVELOPER=
 #
 # Process command-line arguments
 #
-LONGOPTS="help,branch:,dev:"
-OPTS=$(getopt -o "hb:d:" --long "${LONGOPTS}" --name "$0" -- "$@")
-
-if [ $? -ne 0 ]; then
-    usage
-    exit 1
-fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        -b|--branch)
-            BRANCH=$2
-            shift 2
+while getopts ":b:d:" opt; do
+    case "${opt}" in
+        b)
+            BRANCH=${OPTARG}
             ;;
-        -d|--dev)
-            DEVELOPER=$2
-            shift 2
-            ;;
-        --)
-            shift
-            break
+        d)
+            DEVELOPER=${OPTARG}
             ;;
         *)
+            echo "opt=${opt}"
             usage
             ;;
     esac

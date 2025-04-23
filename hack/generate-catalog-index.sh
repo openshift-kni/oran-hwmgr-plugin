@@ -11,7 +11,7 @@ declare WORKDIR=
 
 function usage {
     cat <<EOF
-Usage: $0 --opm <opm-executable> --name <package-name> --channel <channel>
+Usage: $0 -o <opm-executable> -n <package-name> -c <channel> -v <version>
 EOF
     exit 1
 }
@@ -32,44 +32,19 @@ declare NAME=
 declare CHANNEL=
 declare VERSION=
 
-longopts=(
-    "help"
-    "opm:"
-    "name:"
-    "channel:"
-    "version:"
-)
-
-longopts_str=$(IFS=,; echo "${longopts[*]}")
-
-if ! OPTS=$(getopt -o "h" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
-    exit 1
-fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --opm)
-            OPM="$2"
-            shift 2
+while getopts ":o:n:c:v:" opt; do
+    case "${opt}" in
+        o)
+            OPM="${OPTARG}"
             ;;
-        --name)
-            NAME="$2"
-            shift 2
+        n)
+            NAME="${OPTARG}"
             ;;
-        --channel)
-            CHANNEL="$2"
-            shift 2
+        c)
+            CHANNEL="${OPTARG}"
             ;;
-        --version)
-            VERSION="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
+        v)
+            VERSION="${OPTARG}"
             ;;
         *)
             usage

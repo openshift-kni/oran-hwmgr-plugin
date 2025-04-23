@@ -351,7 +351,7 @@ endif
 .PHONY: catalog
 catalog: opm ## Build a catalog.
 	@mkdir -p catalog
-	hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	hack/generate-catalog-index.sh -o $(OPM) -n $(PACKAGE_NAME) -c alpha -v $(VERSION)
 	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
 	$(OPM) validate catalog
 
@@ -368,17 +368,17 @@ catalog-push: ## Push a catalog image.
 .PHONY: catalog-deploy
 catalog-deploy: ## Deploy from catalog image.
 	hack/generate-catalog-deploy.sh \
-		--package $(PACKAGE_NAME) \
-		--namespace $(HWMGR_PLUGIN_NAMESPACE) \
-		--catalog-image $(CATALOG_IMG) \
-		--channel alpha \
-		--install-mode OwnNamespace \
+		-p $(PACKAGE_NAME) \
+		-n $(HWMGR_PLUGIN_NAMESPACE) \
+		-i $(CATALOG_IMG) \
+		-c alpha \
+		-m OwnNamespace \
 		| oc create -f -
 
 # Undeploy from catalog image.
 .PHONY: catalog-undeploy
 catalog-undeploy: ## Undeploy from catalog image.
-	hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(HWMGR_PLUGIN_NAMESPACE) --crd-search "plugin.*oran.openshift.io"
+	hack/catalog-undeploy.sh -p $(PACKAGE_NAME) -n $(HWMGR_PLUGIN_NAMESPACE) -c "plugin.*oran.openshift.io"
 
 .PHONY: test tests
 test tests: manifests generate fmt vet envtest ## Run tests.

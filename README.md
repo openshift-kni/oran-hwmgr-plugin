@@ -65,13 +65,13 @@ $ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-hwmgr-plugin docker-build docker-p
 You can then use the `catalog-deploy` target to generate the catalog and subscription resources and deploy the operator:
 
 ```console
-$ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-hwmgr-plugin VERSION=4.18.0 catalog-deploy
+$ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-hwmgr-plugin catalog-deploy
 hack/generate-catalog-deploy.sh \
-        --package oran-hwmgr-plugin \
-        --namespace oran-hwmgr-plugin \
-        --catalog-image quay.io/${MY_REPO}/oran-hwmgr-plugin-catalog:v4.18.0 \
-        --channel alpha \
-        --install-mode OwnNamespace \
+        -p oran-hwmgr-plugin \
+        -n oran-hwmgr-plugin \
+        -i quay.io/${MY_REPO}/oran-hwmgr-plugin-catalog:v4.18.0 \
+        -c alpha \
+        -m OwnNamespace \
         | oc create -f -
 catalogsource.operators.coreos.com/oran-hwmgr-plugin created
 namespace/oran-hwmgr-plugin created

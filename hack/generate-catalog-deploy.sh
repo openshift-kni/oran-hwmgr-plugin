@@ -8,11 +8,11 @@
 function usage {
     cat <<EOF >&2
 Paramaters:
-    --namespace <namespace>
-    --package <package name>
-    --channel <channel>
-    --catalog-image <image ref>
-    --install-mode <OwnNamespace | AllNamespaces>
+    -n <namespace>
+    -p <package name>
+    -c <channel>
+    -i <image ref>
+    -m <OwnNamespace | AllNamespaces>
 EOF
     exit 1
 }
@@ -100,49 +100,22 @@ declare CHANNEL=
 declare CATALOG_IMG=
 declare INSTALL_MODE=
 
-longopts=(
-    "help"
-    "namespace:"
-    "package:"
-    "catalog-image:"
-    "channel:"
-    "install-mode:"
-)
-
-longopts_str=$(IFS=,; echo "${longopts[*]}")
-
-if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
-    exit 1
-fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --namespace)
-            NAMESPACE="$2"
-            shift 2
+while getopts ":n:p:i:c:m:" opt; do
+    case "${opt}" in
+        n)
+            NAMESPACE="${OPTARG}"
             ;;
-        --package)
-            PACKAGE="$2"
-            shift 2
+        p)
+            PACKAGE="${OPTARG}"
             ;;
-        --catalog-image)
-            CATALOG_IMG="$2"
-            shift 2
+        i)
+            CATALOG_IMG="${OPTARG}"
             ;;
-        --channel)
-            CHANNEL="$2"
-            shift 2
+        c)
+            CHANNEL="${OPTARG}"
             ;;
-        --install-mode)
-            INSTALL_MODE="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
+        m)
+            INSTALL_MODE="${OPTARG}"
             ;;
         *)
             usage

@@ -8,9 +8,9 @@
 function usage {
     cat <<EOF >&2
 Paramaters:
-    --namespace <namespace>
-    --package <package name>
-    --crd-search <crd search grep pattern>
+    -n <namespace>
+    -p <package name>
+    -c <crd search grep pattern>
 EOF
     exit 1
 }
@@ -37,39 +37,16 @@ declare PACKAGE=
 declare NAMESPACE=
 declare CRD_SEARCH=
 
-longopts=(
-    "help"
-    "namespace:"
-    "package:"
-    "crd-search:"
-)
-
-longopts_str=$(IFS=,; echo "${longopts[*]}")
-
-if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
-    exit 1
-fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --namespace)
-            NAMESPACE="$2"
-            shift 2
+while getopts ":n:p:c:" opt; do
+    case "${opt}" in
+        n)
+            NAMESPACE="${OPTARG}"
             ;;
-        --package)
-            PACKAGE="$2"
-            shift 2
+        p)
+            PACKAGE="${OPTARG}"
             ;;
-        --crd-search)
-            CRD_SEARCH="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
+        c)
+            CRD_SEARCH="${OPTARG}"
             ;;
         *)
             usage
