@@ -349,8 +349,6 @@ func (a *Adaptor) applyPreChangeAnnotation(ctx context.Context, bmh *metal3v1alp
 		delete(latestBMH.Annotations, BmhPausedAnnotation)
 		// 3. Set the Day2 config annotation to "in-progress".
 		latestBMH.Annotations[BmhDay2ConfigAnnotation] = "in-progress"
-		// 4. Add the reboot annotation.
-		latestBMH.Annotations[BmhRebootAnnotation] = ""
 
 		patch := client.MergeFrom(patchBase)
 
@@ -494,7 +492,11 @@ func (a *Adaptor) handleTransitionNodes(ctx context.Context, nodelist *hwmgmtv1a
 			if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 				continue
 			}
-
+			if postInstall {
+				if err := a.evaluateCRForReboot(ctx, bmh, uc.AnnotationKey); err != nil {
+					return true, err
+				}
+			}
 			if err := a.processBMHUpdateCase(ctx, &node, bmh, uc, postInstall); err != nil {
 				return true, err
 			}
@@ -503,6 +505,42 @@ func (a *Adaptor) handleTransitionNodes(ctx context.Context, nodelist *hwmgmtv1a
 	}
 
 	return false, nil
+}
+
+func (a *Adaptor) addRebootAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	if err := a.updateBMHMetaWithRetry(ctx, bmhName, "annotation", BmhRebootAnnotation, "", OpAdd); err != nil {
+		return fmt.Errorf("failed to add %s to BMH %+v: %w", BmhRebootAnnotation, bmhName, err)
+	}
+	return nil
+}
+
+func (a *Adaptor) evaluateCRForReboot(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, annotation string) error {
+
+	var changeDetected bool
+	var err error
+
+	switch annotation {
+	case BiosUpdateNeededAnnotation:
+		changeDetected, err = a.isFirmwareSettingsChangeDetected(ctx, bmh)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate FirmwareSettings status: %w", err)
+		}
+
+	case FirmwareUpdateNeededAnnotation:
+		changeDetected, err = a.isHostFirmwareComponentsChangeDetected(ctx, bmh)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate HostFirmwareComponents status: %w", err)
+		}
+	default:
+		a.Logger.ErrorContext(ctx, "unsupported", slog.String("annotation", annotation))
+		return nil
+	}
+
+	if changeDetected {
+		return a.addRebootAnnotation(ctx, bmh)
+	}
+	return nil
 }
 
 // processBMHUpdateCase handles the update for a given BMH and update case.

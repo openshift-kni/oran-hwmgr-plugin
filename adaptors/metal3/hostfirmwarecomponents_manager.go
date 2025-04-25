@@ -15,6 +15,7 @@ import (
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -61,6 +62,16 @@ func convertToFirmwareUpdates(spec pluginv1alpha1.HardwareProfileSpec) []metal3v
 	}
 
 	return updates
+}
+
+func (a *Adaptor) isHostFirmwareComponentsChangeDetected(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	hfc := &metal3v1alpha1.HostFirmwareComponents{}
+	err := a.Client.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, hfc)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
+	}
+	return meta.IsStatusConditionTrue(hfc.Status.Conditions, string(metal3v1alpha1.HostFirmwareComponentsChangeDetected)), nil
 }
 
 func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *metal3v1alpha1.HostFirmwareComponentsStatus,

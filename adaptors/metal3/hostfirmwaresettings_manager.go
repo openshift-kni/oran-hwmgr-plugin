@@ -16,6 +16,7 @@ import (
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -70,6 +71,16 @@ func (a *Adaptor) IsBiosUpdateRequired(ctx context.Context, bmh *metal3v1alpha1.
 	}
 
 	return a.checkAndUpdateFirmwareSettings(ctx, existingHFS, &hfs)
+}
+
+func (a *Adaptor) isFirmwareSettingsChangeDetected(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	hfs := &metal3v1alpha1.HostFirmwareSettings{}
+	err := a.Client.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, hfs)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to get HostFirmwareSettings %s/%s: %w", bmh.Namespace, bmh.Name, err)
+	}
+	return meta.IsStatusConditionTrue(hfs.Status.Conditions, string(metal3v1alpha1.FirmwareSettingsChangeDetected)), nil
 }
 
 // Retrieves existing HostFirmwareSettings or creates a new one if not found.

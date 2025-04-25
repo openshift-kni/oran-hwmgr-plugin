@@ -250,22 +250,7 @@ func (a *Adaptor) handleNodePoolConfiguring(
 		return ctrl.Result{}, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodepool.Name, err)
 	}
 
-	// STEP 1: Handle nodes in transition (from update-needed to update in-progress).
-	updating, err := a.handleTransitionNodes(ctx, nodelist, true)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error handling transitioning nodes: %w", err)
-	}
-	if updating {
-		// Return a short interval requeue to allow time for the transition
-		return utils.RequeueWithShortInterval(), nil
-	}
-
-	// STEP 2: Process any node that is already in the update-in-progress state.
-	if res, handled, err := a.handleInProgressUpdate(ctx, nodelist); err != nil || handled {
-		return res, err
-	}
-
-	// STEP 3: Look for the next node that requires an update.
+	// STEP 1: Look for the next node that requires an update.
 	for _, nodegroup := range nodepool.Spec.NodeGroup {
 		newHwProfile := nodegroup.NodePoolData.HwProfile
 		node := utils.FindNextNodeToUpdate(nodelist, nodegroup.NodePoolData.Name, newHwProfile)
@@ -281,6 +266,21 @@ func (a *Adaptor) handleNodePoolConfiguring(
 		}
 		// Requeue after starting the update on one node.
 		return res, nil
+	}
+
+	// STEP 2: Handle nodes in transition (from update-needed to update in-progress).
+	updating, err := a.handleTransitionNodes(ctx, nodelist, true)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error handling transitioning nodes: %w", err)
+	}
+	if updating {
+		// Return a short interval requeue to allow time for the transition
+		return utils.RequeueWithShortInterval(), nil
+	}
+
+	// STEP 3: Process any node that is already in the update-in-progress state.
+	if res, handled, err := a.handleInProgressUpdate(ctx, nodelist); err != nil || handled {
+		return res, err
 	}
 
 	// STEP 4: If no nodes are pending updates, mark the NodePool as fully configured.
