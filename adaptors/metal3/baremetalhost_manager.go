@@ -344,11 +344,9 @@ func (a *Adaptor) applyPreChangeAnnotation(ctx context.Context, bmh *metal3v1alp
 			latestBMH.Annotations = make(map[string]string)
 		}
 
-		// 1. Remove the detached annotation.
-		delete(latestBMH.Annotations, BmhDetachedAnnotation)
-		// 2. Remove the paused annotation
+		// Remove the paused annotation
 		delete(latestBMH.Annotations, BmhPausedAnnotation)
-		// 3. Set the Day2 config annotation to "in-progress".
+		// Set the Day2 config annotation to "in-progress".
 		latestBMH.Annotations[BmhDay2ConfigAnnotation] = "in-progress"
 
 		patch := client.MergeFrom(patchBase)
@@ -366,7 +364,43 @@ func (a *Adaptor) applyPreChangeAnnotation(ctx context.Context, bmh *metal3v1alp
 	})
 }
 
-func (a *Adaptor) applyPostChangeAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+func (a *Adaptor) removeDetachedAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		var latestBMH metal3v1alpha1.BareMetalHost
+		if err := a.Client.Get(ctx, bmhName, &latestBMH); err != nil {
+			a.Logger.ErrorContext(ctx, "Failed to fetch BMH for deetached annotation removal",
+				slog.Any("BMH", bmhName),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		patchBase := latestBMH.DeepCopy()
+
+		if latestBMH.Annotations == nil {
+			latestBMH.Annotations = make(map[string]string)
+		}
+
+		// Remove the detached annotation.
+		delete(latestBMH.Annotations, BmhDetachedAnnotation)
+
+		patch := client.MergeFrom(patchBase)
+
+		if err := a.Client.Patch(ctx, &latestBMH, patch); err != nil {
+			a.Logger.ErrorContext(ctx, "Failed to remove BMH detached annotation",
+				slog.String("BMH", bmhName.Name),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to remove detached annotation on BMH %+v: %w", bmhName, err)
+		}
+
+		a.Logger.InfoContext(ctx, "Successfully applied pre-change annotations to BMH",
+			slog.Any("BMH", bmhName))
+		return nil
+	})
+}
+
+func (a *Adaptor) removePreChangeAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	if err := a.updateBMHMetaWithRetry(ctx, bmhName, "annotation", BmhDay2ConfigAnnotation, "", OpRemove); err != nil {
 		return fmt.Errorf("failed to remove %s BMH %+v: %w", BmhDetachedAnnotation, bmhName, err)

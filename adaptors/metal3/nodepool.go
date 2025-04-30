@@ -190,7 +190,7 @@ func (a *Adaptor) handleInProgressUpdate(ctx context.Context, nodelist *hwmgmtv1
 		}
 
 		// Apply the post-change annotation to indicate completion.
-		if err := a.applyPostChangeAnnotation(ctx, bmh); err != nil {
+		if err := a.removePreChangeAnnotation(ctx, bmh); err != nil {
 			return ctrl.Result{}, true, fmt.Errorf("failed to apply post-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
 
@@ -219,6 +219,11 @@ func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.N
 		slog.String("curHwProfile", node.Spec.HwProfile),
 		slog.String("newHwProfile", newHwProfile))
 
+	// Apply the pre-change annotation to the BMH.
+	if err := a.applyPreChangeAnnotation(ctx, bmh); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to apply pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
+	}
+
 	// Copy the current node object for patching
 	patch := client.MergeFrom(node.DeepCopy())
 
@@ -237,14 +242,19 @@ func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.N
 
 	if updateRequired {
 		// Apply a pre-change annotation to the BMH.
-		if err := a.applyPreChangeAnnotation(ctx, bmh); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to apply pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
+		if err := a.removeDetachedAnnotation(ctx, bmh); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to remove detached annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
 		if result, err := a.setAwaitConfigCondition(ctx, nodepool); err != nil {
 			return result, err
 		}
 		// Return a medium interval requeue to allow time for the update to progress.
 		return utils.RequeueWithMediumInterval(), nil
+	} else {
+		// No update required, so we can remove the pre-change annotation
+		if err := a.removePreChangeAnnotation(ctx, bmh); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to remove pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
+		}
 	}
 	return ctrl.Result{}, nil
 }
