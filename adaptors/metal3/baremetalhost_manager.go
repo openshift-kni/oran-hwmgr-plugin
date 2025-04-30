@@ -16,6 +16,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	"github.com/openshift-kni/oran-hwmgr-plugin/internal/logging"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -292,7 +293,7 @@ func (a *Adaptor) buildInterfacesFromBMH(nodepool *hwmgmtv1alpha1.NodePool, bmh 
 func (a *Adaptor) countNodesInGroup(ctx context.Context, nodeNames []string, groupName string) int {
 	count := 0
 	for _, nodeName := range nodeNames {
-		node, err := utils.GetNode(ctx, a.Logger, a.Client, a.Namespace, nodeName)
+		node, err := utils.GetNode(ctx, a.Logger, a.NoncachedClient, a.Namespace, nodeName)
 		if err == nil && node != nil {
 			if node.Spec.GroupName == groupName {
 				count++
@@ -374,10 +375,13 @@ func (a *Adaptor) applyPostChangeAnnotation(ctx context.Context, bmh *metal3v1al
 }
 
 func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, nodeName string, postInstall bool) (bool, error) {
-	node, err := utils.GetNode(ctx, a.Logger, a.Client, a.Namespace, nodeName)
+	node, err := utils.GetNode(ctx, a.Logger, a.NoncachedClient, a.Namespace, nodeName)
 	if err != nil {
 		return false, fmt.Errorf("failed to get node %s/%s: %w", a.Namespace, nodeName, err)
 	}
+
+	ctx = logging.AppendCtx(ctx, slog.String("hwprofile", node.Spec.HwProfile))
+	a.Logger.InfoContext(ctx, "Retrieving hwprofile")
 
 	name := types.NamespacedName{
 		Name:      node.Spec.HwProfile,

@@ -29,7 +29,7 @@ const (
 func GetNode(
 	ctx context.Context,
 	logger *slog.Logger,
-	c client.Client,
+	client client.Reader,
 	namespace, nodename string) (*hwmgmtv1alpha1.Node, error) {
 
 	logger.InfoContext(ctx, "Getting Node", slog.String("nodename", nodename))
@@ -37,7 +37,7 @@ func GetNode(
 	node := &hwmgmtv1alpha1.Node{}
 
 	if err := RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
-		return c.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node)
+		return client.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node)
 	}); err != nil {
 		return node, fmt.Errorf("failed to get Node for update: %w", err)
 	}

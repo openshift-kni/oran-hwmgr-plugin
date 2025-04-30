@@ -27,18 +27,20 @@ import (
 
 type Adaptor struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Logger    *slog.Logger
-	Namespace string
-	AdaptorID pluginv1alpha1.HardwareManagerAdaptorID
+	NoncachedClient client.Reader
+	Scheme          *runtime.Scheme
+	Logger          *slog.Logger
+	Namespace       string
+	AdaptorID       pluginv1alpha1.HardwareManagerAdaptorID
 }
 
-func NewAdaptor(client client.Client, scheme *runtime.Scheme, logger *slog.Logger, namespace string) *Adaptor {
+func NewAdaptor(client client.Client, noncachedClient client.Reader, scheme *runtime.Scheme, logger *slog.Logger, namespace string) *Adaptor {
 	return &Adaptor{
-		Client:    client,
-		Scheme:    scheme,
-		Logger:    logger.With(slog.String("adaptor", "loopback")),
-		Namespace: namespace,
+		Client:          client,
+		NoncachedClient: noncachedClient,
+		Scheme:          scheme,
+		Logger:          logger.With(slog.String("adaptor", "loopback")),
+		Namespace:       namespace,
 	}
 }
 

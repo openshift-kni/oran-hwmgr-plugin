@@ -42,18 +42,19 @@ const (
 // HwMgrAdaptorController
 type HwMgrAdaptorController struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Logger    *slog.Logger
-	Namespace string
-	adaptors  map[string]adaptorinterface.HwMgrAdaptorIntf
+	NoncachedClient client.Reader
+	Scheme          *runtime.Scheme
+	Logger          *slog.Logger
+	Namespace       string
+	adaptors        map[string]adaptorinterface.HwMgrAdaptorIntf
 }
 
 func (c *HwMgrAdaptorController) SetupWithManager(mgr ctrl.Manager) error {
 	// Setup the supported adaptors
 	c.adaptors = make(map[string]adaptorinterface.HwMgrAdaptorIntf)
-	c.adaptors[LoopbackAdaptorID] = loopback.NewAdaptor(c.Client, c.Scheme, c.Logger, c.Namespace)
-	c.adaptors[DellHwMgrAdaptorID] = dellhwmgr.NewAdaptor(c.Client, c.Scheme, c.Logger, c.Namespace)
-	c.adaptors[Metal3AdaptorID] = metal3.NewAdaptor(c.Client, c.Scheme, c.Logger, c.Namespace)
+	c.adaptors[LoopbackAdaptorID] = loopback.NewAdaptor(c.Client, c.NoncachedClient, c.Scheme, c.Logger, c.Namespace)
+	c.adaptors[DellHwMgrAdaptorID] = dellhwmgr.NewAdaptor(c.Client, c.NoncachedClient, c.Scheme, c.Logger, c.Namespace)
+	c.adaptors[Metal3AdaptorID] = metal3.NewAdaptor(c.Client, c.NoncachedClient, c.Scheme, c.Logger, c.Namespace)
 
 	for id, adaptor := range c.adaptors {
 		if err := adaptor.SetupAdaptor(mgr); err != nil {

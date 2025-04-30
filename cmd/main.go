@@ -158,10 +158,11 @@ func _main() int {
 	}
 
 	hwmgrAdaptor := &adaptors.HwMgrAdaptorController{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Logger:    slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "adaptors")),
-		Namespace: myNamespace,
+		Client:          mgr.GetClient(),
+		NoncachedClient: mgr.GetAPIReader(),
+		Scheme:          mgr.GetScheme(),
+		Logger:          slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "adaptors")),
+		Namespace:       myNamespace,
 	}
 	if err = hwmgrAdaptor.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to setup adaptor controller")
