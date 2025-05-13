@@ -139,21 +139,18 @@ func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.Ha
 		return resp, http.StatusInternalServerError, fmt.Errorf("failed to get bmh list: %w", err)
 	}
 
-	pools := make(map[string]string)
-
 	for _, bmh := range bmhList.Items {
 		if includeInInventory(bmh) {
-			pools[bmh.Labels[LabelSiteID]] = bmh.Labels[LabelResourcePoolID]
-		}
-	}
+			siteID := bmh.Labels[LabelSiteID]
+			poolID := bmh.Labels[LabelResourcePoolID]
+			resp = append(resp, invserver.ResourcePoolInfo{
+				ResourcePoolId: poolID,
+				Description:    poolID,
+				Name:           poolID,
+				SiteId:         &siteID,
+			})
 
-	for siteId, poolID := range pools {
-		resp = append(resp, invserver.ResourcePoolInfo{
-			ResourcePoolId: poolID,
-			Description:    poolID,
-			Name:           poolID,
-			SiteId:         &siteId,
-		})
+		}
 	}
 
 	return resp, http.StatusOK, nil

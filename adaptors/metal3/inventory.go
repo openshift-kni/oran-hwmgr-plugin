@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package metal3
 
 import (
+	"fmt"
 	"regexp"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -28,6 +29,8 @@ var REPatternInterfaceLabel = regexp.MustCompile(`^` + LabelPrefixInterfaces + `
 
 // The following regex pattern is used to check resourceselector label pattern
 var REPatternResourceSelectorLabel = regexp.MustCompile(`^` + LabelPrefixResourceSelector)
+
+var REPatternResourceSelectorLabelMatch = regexp.MustCompile(`^` + LabelPrefixResourceSelector + `(.*)`)
 
 var emptyString = ""
 
@@ -135,7 +138,7 @@ func getResourceInfoProcessors(bmh metal3v1alpha1.BareMetalHost) []invserver.Pro
 }
 
 func getResourceInfoResourceId(bmh metal3v1alpha1.BareMetalHost) string {
-	return emptyString
+	return fmt.Sprintf("%s/%s", bmh.Namespace, bmh.Name)
 }
 
 func getResourceInfoResourcePoolId(bmh metal3v1alpha1.BareMetalHost) string {
@@ -154,7 +157,18 @@ func getResourceInfoSerialNumber(bmh metal3v1alpha1.BareMetalHost) string {
 }
 
 func getResourceInfoTags(bmh metal3v1alpha1.BareMetalHost) *[]string {
-	return nil
+	var tags []string
+
+	for fullLabel, value := range bmh.Labels {
+		match := REPatternResourceSelectorLabelMatch.FindStringSubmatch(fullLabel)
+		if len(match) != 2 {
+			continue
+		}
+
+		tags = append(tags, fmt.Sprintf("%s: %s", match[1], value))
+	}
+
+	return &tags
 }
 
 func getResourceInfoUsageState(bmh metal3v1alpha1.BareMetalHost) invserver.ResourceInfoUsageState {
