@@ -88,7 +88,7 @@ func (c *HwMgrAdaptorController) getHwMgr(ctx context.Context, hwMgrId string) (
 			return nil, http.StatusServiceUnavailable, fmt.Errorf("required config data missing from HardwareManager: name=%s", hwmgr.Name)
 		}
 	case pluginv1alpha1.SupportedAdaptors.Metal3:
-		c.Logger.InfoContext(ctx, "HardwareManager", slog.String("name", hwmgr.Name))
+		c.Logger.DebugContext(ctx, "HardwareManager", slog.String("name", hwmgr.Name))
 	default:
 		return nil, http.StatusServiceUnavailable, fmt.Errorf("unsupported adaptorId (%s) HardwareManager: name=%s", hwmgr.Spec.AdaptorID, hwmgr.Name)
 	}

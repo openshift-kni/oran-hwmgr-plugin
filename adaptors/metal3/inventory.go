@@ -7,10 +7,12 @@ SPDX-License-Identifier: Apache-2.0
 package metal3
 
 import (
+	"fmt"
 	"regexp"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	invserver "github.com/openshift-kni/oran-hwmgr-plugin/internal/server/api/generated"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
 const (
@@ -21,6 +23,12 @@ const (
 	LabelPrefixResourceSelector = "resourceselector.oran.openshift.io/"
 
 	LabelPrefixInterfaces = "interfacelabel.oran.openshift.io/"
+
+	AnnotationPrefixResourceInfo        = "resourceinfo.oran.openshift.io/"
+	AnnotationResourceInfoDescription   = AnnotationPrefixResourceInfo + "description"
+	AnnotationResourceInfoPartNumber    = AnnotationPrefixResourceInfo + "partNumber"
+	AnnotationResourceInfoGlobalAssetId = AnnotationPrefixResourceInfo + "globalAssetId"
+	AnnotationsResourceInfoGroups       = AnnotationPrefixResourceInfo + "groups"
 )
 
 // The following regex pattern is used to find interface labels
@@ -29,6 +37,8 @@ var REPatternInterfaceLabel = regexp.MustCompile(`^` + LabelPrefixInterfaces + `
 // The following regex pattern is used to check resourceselector label pattern
 var REPatternResourceSelectorLabel = regexp.MustCompile(`^` + LabelPrefixResourceSelector)
 
+var REPatternResourceSelectorLabelMatch = regexp.MustCompile(`^` + LabelPrefixResourceSelector + `(.*)`)
+
 var emptyString = ""
 
 func getResourceInfoAdminState(bmh metal3v1alpha1.BareMetalHost) invserver.ResourceInfoAdminState {
@@ -36,14 +46,32 @@ func getResourceInfoAdminState(bmh metal3v1alpha1.BareMetalHost) invserver.Resou
 }
 
 func getResourceInfoDescription(bmh metal3v1alpha1.BareMetalHost) string {
+	if bmh.Annotations != nil {
+		return bmh.Annotations[AnnotationResourceInfoDescription]
+	}
+
 	return emptyString
 }
 
 func getResourceInfoGlobalAssetId(bmh metal3v1alpha1.BareMetalHost) *string {
+	if bmh.Annotations != nil {
+		annotation := bmh.Annotations[AnnotationResourceInfoGlobalAssetId]
+		return &annotation
+	}
+
 	return &emptyString
 }
 
 func getResourceInfoGroups(bmh metal3v1alpha1.BareMetalHost) *[]string {
+	if bmh.Annotations != nil {
+		annotation, exists := bmh.Annotations[AnnotationsResourceInfoGroups]
+		if exists {
+			// Split by comma, removing leading or trailing whitespace around the comma
+			re := regexp.MustCompile(` *, *`)
+			groups := re.Split(annotation, -1)
+			return &groups
+		}
+	}
 	return nil
 }
 
@@ -82,6 +110,10 @@ func getResourceInfoOperationalState(bmh metal3v1alpha1.BareMetalHost) invserver
 }
 
 func getResourceInfoPartNumber(bmh metal3v1alpha1.BareMetalHost) string {
+	if bmh.Annotations != nil {
+		return bmh.Annotations[AnnotationResourceInfoPartNumber]
+	}
+
 	return emptyString
 }
 
@@ -135,15 +167,18 @@ func getResourceInfoProcessors(bmh metal3v1alpha1.BareMetalHost) []invserver.Pro
 }
 
 func getResourceInfoResourceId(bmh metal3v1alpha1.BareMetalHost) string {
-	return emptyString
+	return fmt.Sprintf("%s/%s", bmh.Namespace, bmh.Name)
 }
 
 func getResourceInfoResourcePoolId(bmh metal3v1alpha1.BareMetalHost) string {
 	return bmh.Labels[LabelResourcePoolID]
 }
 
-func getResourceInfoResourceProfileId(bmh metal3v1alpha1.BareMetalHost) string {
-	return bmh.Status.HardwareProfile
+func getResourceInfoResourceProfileId(node *hwmgmtv1alpha1.Node) string {
+	if node != nil {
+		return node.Status.HwProfile
+	}
+	return emptyString
 }
 
 func getResourceInfoSerialNumber(bmh metal3v1alpha1.BareMetalHost) string {
@@ -154,7 +189,18 @@ func getResourceInfoSerialNumber(bmh metal3v1alpha1.BareMetalHost) string {
 }
 
 func getResourceInfoTags(bmh metal3v1alpha1.BareMetalHost) *[]string {
-	return nil
+	var tags []string
+
+	for fullLabel, value := range bmh.Labels {
+		match := REPatternResourceSelectorLabelMatch.FindStringSubmatch(fullLabel)
+		if len(match) != 2 {
+			continue
+		}
+
+		tags = append(tags, fmt.Sprintf("%s: %s", match[1], value))
+	}
+
+	return &tags
 }
 
 func getResourceInfoUsageState(bmh metal3v1alpha1.BareMetalHost) invserver.ResourceInfoUsageState {
@@ -168,13 +214,13 @@ func getResourceInfoVendor(bmh metal3v1alpha1.BareMetalHost) string {
 	return emptyString
 }
 
-func getResourceInfo(bmh metal3v1alpha1.BareMetalHost) invserver.ResourceInfo {
+func getResourceInfo(bmh metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.Node) invserver.ResourceInfo {
 	return invserver.ResourceInfo{
 		AdminState:       getResourceInfoAdminState(bmh),
 		Description:      getResourceInfoDescription(bmh),
 		GlobalAssetId:    getResourceInfoGlobalAssetId(bmh),
 		Groups:           getResourceInfoGroups(bmh),
-		HwProfile:        getResourceInfoResourceProfileId(bmh),
+		HwProfile:        getResourceInfoResourceProfileId(node),
 		Labels:           getResourceInfoLabels(bmh),
 		Memory:           getResourceInfoMemory(bmh),
 		Model:            getResourceInfoModel(bmh),

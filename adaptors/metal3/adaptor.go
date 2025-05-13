@@ -139,21 +139,18 @@ func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.Ha
 		return resp, http.StatusInternalServerError, fmt.Errorf("failed to get bmh list: %w", err)
 	}
 
-	pools := make(map[string]string)
-
 	for _, bmh := range bmhList.Items {
 		if includeInInventory(bmh) {
-			pools[bmh.Labels[LabelSiteID]] = bmh.Labels[LabelResourcePoolID]
-		}
-	}
+			siteID := bmh.Labels[LabelSiteID]
+			poolID := bmh.Labels[LabelResourcePoolID]
+			resp = append(resp, invserver.ResourcePoolInfo{
+				ResourcePoolId: poolID,
+				Description:    poolID,
+				Name:           poolID,
+				SiteId:         &siteID,
+			})
 
-	for siteId, poolID := range pools {
-		resp = append(resp, invserver.ResourcePoolInfo{
-			ResourcePoolId: poolID,
-			Description:    poolID,
-			Name:           poolID,
-			SiteId:         &siteId,
-		})
+		}
 	}
 
 	return resp, http.StatusOK, nil
@@ -162,16 +159,20 @@ func (a *Adaptor) GetResourcePools(ctx context.Context, hwmgr *pluginv1alpha1.Ha
 func (a *Adaptor) GetResources(ctx context.Context, hwmgr *pluginv1alpha1.HardwareManager) ([]invserver.ResourceInfo, int, error) {
 	var resp []invserver.ResourceInfo
 
-	var bmhList metal3v1alpha1.BareMetalHostList
-	var opts []client.ListOption
+	nodes, err := a.GetBMHToNodeMap(ctx)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "Unable to get list of current nodes", slog.String("error", err.Error()))
+		return resp, http.StatusInternalServerError, fmt.Errorf("failed to query current nodes: %w", err)
+	}
 
-	if err := a.Client.List(ctx, &bmhList, opts...); err != nil {
+	var bmhList metal3v1alpha1.BareMetalHostList
+	if err := a.Client.List(ctx, &bmhList); err != nil {
 		return resp, http.StatusInternalServerError, fmt.Errorf("failed to get bmh list: %w", err)
 	}
 
 	for _, bmh := range bmhList.Items {
 		if includeInInventory(bmh) {
-			resp = append(resp, getResourceInfo(bmh))
+			resp = append(resp, getResourceInfo(bmh, a.GetNodeForBMH(nodes, &bmh)))
 		}
 	}
 

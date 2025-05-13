@@ -45,6 +45,21 @@ func GetNode(
 	return node, nil
 }
 
+// GetNodeList retrieves the node list
+func GetNodeList(
+	ctx context.Context,
+	client client.Reader) (*hwmgmtv1alpha1.NodeList, error) {
+
+	nodeList := &hwmgmtv1alpha1.NodeList{}
+	if err := RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		return client.List(ctx, nodeList)
+	}); err != nil {
+		return nodeList, fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	return nodeList, nil
+}
+
 // GenerateNodeName
 func GenerateNodeName() string {
 	return uuid.NewString()

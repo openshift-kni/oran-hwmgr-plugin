@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,15 +20,36 @@ import (
 	"k8s.io/client-go/util/retry"
 )
 
-// GetNodeList retrieves the node list
-func (a *Adaptor) GetNodeList(ctx context.Context) (*hwmgmtv1alpha1.NodeList, error) {
+// GetBMHToNodeMap get a list of nodes, mapped to BMH namespace/name
+func (a *Adaptor) GetBMHToNodeMap(ctx context.Context) (map[string]hwmgmtv1alpha1.Node, error) {
+	nodes := make(map[string]hwmgmtv1alpha1.Node)
 
-	nodeList := &hwmgmtv1alpha1.NodeList{}
-	if err := a.Client.List(ctx, nodeList); err != nil {
-		return nodeList, fmt.Errorf("failed to list nodes: %w", err)
+	nodelist, err := utils.GetNodeList(ctx, a.Client)
+	if err != nil {
+		a.Logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
+		return nodes, fmt.Errorf("failed to query node list: %w", err)
 	}
 
-	return nodeList, nil
+	for _, node := range nodelist.Items {
+		bmhName := node.Spec.HwMgrNodeId
+		bmhNamespace := node.Spec.HwMgrNodeNs
+
+		if bmhName != "" && bmhNamespace != "" {
+			nodes[bmhNamespace+"/"+bmhName] = node
+		}
+	}
+
+	return nodes, nil
+}
+
+func (a *Adaptor) GetNodeForBMH(nodes map[string]hwmgmtv1alpha1.Node, bmh *metal3v1alpha1.BareMetalHost) *hwmgmtv1alpha1.Node {
+	bmhName := bmh.Name
+	bmhNamespace := bmh.Namespace
+
+	if node, exists := nodes[bmhNamespace+"/"+bmhName]; exists {
+		return &node
+	}
+	return nil
 }
 
 // CreateNode creates a Node CR with specified attributes
