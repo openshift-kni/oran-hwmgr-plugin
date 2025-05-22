@@ -14,6 +14,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,18 +27,18 @@ func validateFirmwareUpdateSpec(spec pluginv1alpha1.HardwareProfileSpec) error {
 
 	if spec.BiosFirmware.Version != "" {
 		if spec.BiosFirmware.URL == "" {
-			return fmt.Errorf("missing BIOS firmware URL for version: %v", spec.BiosFirmware.Version)
+			return typederrors.NewInputError("missing BIOS firmware URL for version: %v", spec.BiosFirmware.Version)
 		}
 		if !utils.IsValidURL(spec.BiosFirmware.URL) {
-			return fmt.Errorf("invalid BIOS firmware URL: %v", spec.BiosFirmware.URL)
+			return typederrors.NewInputError("invalid BIOS firmware URL: %v", spec.BiosFirmware.URL)
 		}
 	}
 	if spec.BmcFirmware.Version != "" {
 		if spec.BmcFirmware.URL == "" {
-			return fmt.Errorf("missing BMC firmware URL for version: %v", spec.BmcFirmware.Version)
+			return typederrors.NewInputError("missing BMC firmware URL for version: %v", spec.BmcFirmware.Version)
 		}
 		if !utils.IsValidURL(spec.BmcFirmware.URL) {
-			return fmt.Errorf("invalid BMC firmware URL: %v", spec.BmcFirmware.URL)
+			return typederrors.NewInputError("invalid BMC firmware URL: %v", spec.BmcFirmware.URL)
 		}
 	}
 
@@ -164,7 +165,7 @@ func (a *Adaptor) updateHostFirmwareComponents(ctx context.Context, name types.N
 
 func (a *Adaptor) IsFirmwareUpdateRequired(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, spec pluginv1alpha1.HardwareProfileSpec) (bool, error) {
 	if err := validateFirmwareUpdateSpec(spec); err != nil {
-		return false, fmt.Errorf("firmware spec is invalid (%v): %w", spec, err)
+		return false, err
 	}
 
 	existingHFC, created, err := a.getOrCreateHostFirmwareComponents(ctx, bmh, spec)

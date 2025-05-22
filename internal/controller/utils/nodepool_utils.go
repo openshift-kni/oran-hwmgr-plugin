@@ -197,6 +197,48 @@ func UpdateNodePoolPluginStatus(
 	return nil
 }
 
+// DeriveNodePoolStatusFromNodes evaluates all child nodes and returns an appropriate
+// NodePool Configured condition status and reason.
+func DeriveNodePoolStatusFromNodes(
+	nodelist *hwmgmtv1alpha1.NodeList,
+) (metav1.ConditionStatus, string, string) {
+
+	for _, node := range nodelist.Items {
+		cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		if cond == nil {
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
+				fmt.Sprintf("Node %s missing Configured condition", node.Name)
+		}
+
+		switch cond.Reason {
+		case string(hwmgmtv1alpha1.InvalidInput):
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InvalidInput),
+				fmt.Sprintf("Node %s: %s", node.Name, cond.Message)
+
+		case string(hwmgmtv1alpha1.Failed):
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.Failed),
+				fmt.Sprintf("Node %s: %s", node.Name, cond.Message)
+
+		case string(hwmgmtv1alpha1.InProgress):
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
+				fmt.Sprintf("Node %s: %s", node.Name, cond.Message)
+
+		case string(hwmgmtv1alpha1.ConfigApplied):
+			// This node is configured — keep checking
+
+		case string(hwmgmtv1alpha1.ConfigUpdate):
+			return cond.Status, cond.Reason, fmt.Sprintf("Node %s: %s", node.Name, cond.Message)
+
+		default:
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
+				fmt.Sprintf("Node %s: unrecognized reason %s", node.Name, cond.Reason)
+		}
+	}
+
+	// If we got here, all nodes were ConfigSuccess
+	return metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigSuccess)
+}
+
 func NodepoolAddFinalizer(
 	ctx context.Context,
 	c client.Client,

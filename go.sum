@@ -195,8 +195,8 @@ github.com/onsi/gomega v1.17.0/go.mod h1:HnhC7FXeEQY45zxNK3PPoIUhzk/80Xly9PcubAl
 github.com/onsi/gomega v1.19.0/go.mod h1:LY+I3pBVzYsTBU1AnDwOSxaYi9WoWiqgwooUqq9yPro=
 github.com/onsi/gomega v1.36.2 h1:koNYke6TVk6ZmnyHrCXba/T/MoLBXFjeC1PtvYgw0A8=
 github.com/onsi/gomega v1.36.2/go.mod h1:DdwyADRjrc825LhMEkD76cHR5+pUnjhUN8GlHlRPHzY=
-github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250326123606-1734d8813393 h1:hMFK5C9TVPAZoV+cAPVNEh1Ow6AnCuWwu6V0qFo85U8=
-github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250326123606-1734d8813393/go.mod h1:hGYwDOHQ//39zPqqI7YQgUYx/H3l0cRp6zwh6EJQ2Fc=
+github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250512185943-b6d9f68b2505 h1:/4jFnX8B9TRcOb6dkU47Yf4Q7Ovd4SO/mxeMX/HA6Lg=
+github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250512185943-b6d9f68b2505/go.mod h1:pWoH/zUEtv/be48p/k97NuRMjbclrlBYgGQGtDaRr2Y=
 github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581 h1:YWomd7tA7icznvjpDrSJ8Ksfd0xPWG4E0nEBhvABjSA=
 github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581/go.mod h1:bVdXmD7IV/4GdElGPozy6U7lWdRXA4qyRVGJV57uQ5M=
 github.com/perimeterx/marshmallow v1.1.5 h1:a2LALqQ1BlHM8PZblsDdidgv1mWi1DgC2UmX50IvK2s=
