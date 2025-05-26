@@ -9,6 +9,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -195,6 +196,41 @@ func UpdateNodePoolPluginStatus(
 	}
 
 	return nil
+}
+
+// DeriveNodePoolStatusFromNodes evaluates all child nodes and returns an appropriate
+// NodePool Configured condition status and reason.
+func DeriveNodePoolStatusFromNodes(
+	ctx context.Context,
+	reader client.Reader,
+	logger *slog.Logger,
+	nodelist *hwmgmtv1alpha1.NodeList,
+) (metav1.ConditionStatus, string, string) {
+
+	for _, node := range nodelist.Items {
+		// Fetch the latest version of the node from the API server
+		updatedNode, err := GetNode(ctx, logger, reader, node.Namespace, node.Name)
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to fetch updated node", slog.String("name", node.Name), slog.String("error", err.Error()))
+			// Fail conservatively if we can't confirm the node's status
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
+				fmt.Sprintf("Node %s could not be read: %v", node.Name, err)
+		}
+
+		cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		if cond == nil {
+			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
+				fmt.Sprintf("Node %s missing Configured condition", node.Name)
+		}
+
+		// If not successfully applied, return this node’s current condition
+		if cond.Reason != string(hwmgmtv1alpha1.ConfigApplied) {
+			return cond.Status, cond.Reason, fmt.Sprintf("Node %s: %s", node.Name, cond.Message)
+		}
+	}
+
+	// All nodes are successfully configured
+	return metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigSuccess)
 }
 
 func NodepoolAddFinalizer(

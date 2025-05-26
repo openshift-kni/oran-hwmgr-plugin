@@ -96,7 +96,18 @@ func FindNodeUpdateInProgress(nodelist *hwmgmtv1alpha1.NodeList) *hwmgmtv1alpha1
 // FindNextNodeToUpdate scans the nodelist to find the first node with stale HwProfile
 func FindNextNodeToUpdate(nodelist *hwmgmtv1alpha1.NodeList, groupname, newHwProfile string) *hwmgmtv1alpha1.Node {
 	for _, node := range nodelist.Items {
-		if groupname == node.Spec.GroupName && newHwProfile != node.Spec.HwProfile {
+		if groupname != node.Spec.GroupName {
+			continue
+		}
+
+		if newHwProfile != node.Spec.HwProfile {
+			return &node
+		}
+
+		// Profile is already set — but check if it failed due to invalid inputs
+		cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		if cond == nil || cond.Reason == string(hwmgmtv1alpha1.InvalidInput) {
+			// retry this node
 			return &node
 		}
 	}
@@ -129,11 +140,12 @@ func FindNodeConfigInProgress(nodelist *hwmgmtv1alpha1.NodeList) *hwmgmtv1alpha1
 	return nil
 }
 
-// SetNodeUpdatingStatus sets the node Configured condition
-func SetNodeUpdatingStatus(
+// SetNodeConditionStatus sets a condition on the node status with the provided condition type
+func SetNodeConditionStatus(
 	ctx context.Context,
 	c client.Client,
 	nodename, namespace string,
+	conditionType string,
 	conditionStatus metav1.ConditionStatus,
 	reason, message string,
 ) error {
@@ -146,7 +158,7 @@ func SetNodeUpdatingStatus(
 
 		SetStatusCondition(
 			&node.Status.Conditions,
-			string(hwmgmtv1alpha1.Configured), // condition type remains the same
+			conditionType,
 			reason,
 			conditionStatus,
 			message,

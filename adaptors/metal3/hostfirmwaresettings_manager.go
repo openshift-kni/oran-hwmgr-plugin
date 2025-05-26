@@ -67,7 +67,10 @@ func (a *Adaptor) IsBiosUpdateRequired(ctx context.Context, bmh *metal3v1alpha1.
 	}
 
 	if err := a.validateBiosSettings(ctx, existingHFS, hfs.Spec.Settings); err != nil {
-		return false, fmt.Errorf("hfs %s/%s: %w", existingHFS.Namespace, existingHFS.Name, err)
+		if !typederrors.IsInputError(err) {
+			return false, fmt.Errorf("hfs %s/%s: %w", existingHFS.Namespace, existingHFS.Name, err)
+		}
+		return false, err
 	}
 
 	return a.checkAndUpdateFirmwareSettings(ctx, existingHFS, &hfs)

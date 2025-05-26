@@ -16,6 +16,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-hwmgr-plugin/internal/controller/utils"
+	typederrors "github.com/openshift-kni/oran-hwmgr-plugin/internal/typed-errors"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,8 +42,8 @@ const (
 	BmhRebootAnnotation            = "reboot.metal3.io"
 	BiosUpdateNeededAnnotation     = "hwmgr-plugin.oran.openshift.io/bios-update-needed"
 	FirmwareUpdateNeededAnnotation = "hwmgr-plugin.oran.openshift.io/firmware-update-needed"
-	BmhNamespaceLabel              = "baremetalhost.metal3.io/namespace"
 	BmhAllocatedLabel              = "hwmgr-plugin.oran.openshift.io/allocated"
+	NodeNameAnnotation             = "hwmgr-plugin.oran.openshift.io/node-name"
 	Metal3Finalizer                = "preprovisioningimage.metal3.io"
 	UpdateReasonBIOSSettings       = "bios-settings-update"
 	UpdateReasonFirmware           = "firmware-update"
@@ -408,6 +409,35 @@ func (a *Adaptor) removePreChangeAnnotation(ctx context.Context, bmh *metal3v1al
 	return nil
 }
 
+func (a *Adaptor) processHwProfileWithHandledError(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost,
+	nodeName, nodeNamepace, profileName string, postInstall bool) (bool, error) {
+
+	updateRequired, err := a.processHwProfile(ctx, bmh, profileName, postInstall)
+	contType := string(hwmgmtv1alpha1.Provisioned)
+	if postInstall {
+		contType = string(hwmgmtv1alpha1.Configured)
+	}
+	if err != nil {
+		reason := hwmgmtv1alpha1.Failed
+		if typederrors.IsInputError(err) {
+			reason = hwmgmtv1alpha1.InvalidInput
+		}
+		if err := utils.SetNodeConditionStatus(ctx, a.Client, nodeName, nodeNamepace,
+			contType, metav1.ConditionFalse, string(reason), err.Error()); err != nil {
+			a.Logger.ErrorContext(ctx, "failed to update node status", slog.String("node", nodeName), slog.String("error", err.Error()))
+		}
+		return updateRequired, err
+	}
+	if !updateRequired && postInstall {
+		if err := utils.SetNodeConditionStatus(ctx, a.Client, nodeName, nodeNamepace,
+			contType, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied),
+			string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
+			a.Logger.ErrorContext(ctx, "failed to update node status", slog.String("node", nodeName), slog.String("error", err.Error()))
+		}
+	}
+	return updateRequired, nil
+}
+
 func (a *Adaptor) processHwProfile(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, profileName string, postInstall bool) (bool, error) {
 
 	var err error
@@ -607,6 +637,19 @@ func (a *Adaptor) processBMHUpdateCase(ctx context.Context, node *hwmgmtv1alpha1
 		LogLabel      string
 	}, postInstall bool) error {
 
+	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError && bmh.Status.ErrorType != metal3v1alpha1.PowerManagementError {
+		message := "BMH in error state"
+		a.Logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name))
+		condType := hwmgmtv1alpha1.Provisioned
+		if postInstall {
+			condType = hwmgmtv1alpha1.Configured
+		}
+		if err := a.SetNodeFailedStatus(ctx, node, string(condType), message); err != nil {
+			a.Logger.ErrorContext(ctx, "failed to set node failed status", slog.String("node", node.Name), slog.String("error", err.Error()))
+		}
+		return fmt.Errorf("unable to initiate update for BMH %s/%s", bmh.Namespace, bmh.Name)
+	}
+
 	// Check whether the current state of the BMH meets the transition condition.
 	if postInstall {
 		if bmh.Status.OperationalStatus != metal3v1alpha1.OperationalStatusServicing {
@@ -632,11 +675,6 @@ func (a *Adaptor) processBMHUpdateCase(ctx context.Context, node *hwmgmtv1alpha1
 		a.Logger.InfoContext(ctx,
 			fmt.Sprintf("BMH transitioned to 'Preparing' state for %s update", uc.LogLabel),
 			slog.String("BMH", bmh.Name))
-	}
-
-	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
-		a.Logger.InfoContext(ctx, "BMH in error state", slog.String("BMH", bmh.Name))
-		return fmt.Errorf("unable to initiate update for BMH %s/%s", bmh.Namespace, bmh.Name)
 	}
 
 	// Remove the update-needed annotation from the BMH.
@@ -685,6 +723,17 @@ func (a *Adaptor) handleBMHCompletion(ctx context.Context, nodelist *hwmgmtv1alp
 
 	// If BMH is not available yet, update is still ongoing
 	if !bmhAvailable {
+		// BMH entered an error state
+		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
+			errMessage := fmt.Errorf("bmh %s/%s in an error state %s", bmh.Namespace, bmh.Name, bmh.Status.Provisioning.State)
+			if err := utils.SetNodeConditionStatus(ctx, a.Client, node.Name, node.Namespace,
+				string(hwmgmtv1alpha1.Provisioned), metav1.ConditionFalse,
+				string(hwmgmtv1alpha1.Failed), errMessage.Error()); err != nil {
+				a.Logger.ErrorContext(ctx, "failed to set node condition status",
+					slog.String("Node", node.Name), slog.String("error", err.Error()))
+			}
+			return false, errMessage
+		}
 		return true, nil
 	}
 
@@ -725,7 +774,7 @@ func (a *Adaptor) checkForPendingUpdate(ctx context.Context, nodepool *hwmgmtv1a
 
 func (a *Adaptor) getBMHForNode(ctx context.Context, node *hwmgmtv1alpha1.Node) (*metal3v1alpha1.BareMetalHost, error) {
 	bmhName := node.Spec.HwMgrNodeId
-	bmhNamespace := node.Labels[BmhNamespaceLabel]
+	bmhNamespace := node.Spec.HwMgrNodeNs
 	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}
 
 	var bmh metal3v1alpha1.BareMetalHost
