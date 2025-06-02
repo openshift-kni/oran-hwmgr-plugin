@@ -19,24 +19,49 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+func contains(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
 // AllocateBMH assigns a BareMetalHost to a NodePool.
 func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, nodepool *hwmgmtv1alpha1.NodePool, group hwmgmtv1alpha1.NodeGroup) error {
-	nodeName := utils.GenerateNodeName()
+
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	nodeName := bmh.Annotations[NodeNameAnnotation]
+	if nodeName == "" {
+		nodeName = utils.GenerateNodeName()
+		if err := a.updateBMHMetaWithRetry(ctx, bmhName, "annotation", NodeNameAnnotation, nodeName, OpAdd); err != nil {
+			return fmt.Errorf("failed to save node name annotation to BMH (%s): %w", bmh.Name, err)
+		}
+	}
+
 	nodeId := bmh.Name
 	nodeNs := bmh.Namespace
 	cloudID := nodepool.Spec.CloudID // cluster name
 
+	// Ensure node is created
 	if err := a.CreateNode(ctx, nodepool, cloudID, nodeName, nodeId, nodeNs, group.NodePoolData.Name, group.NodePoolData.HwProfile); err != nil {
 		return fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
-	// Label the BMH
+	// Process HW profile
+	updating, err := a.processHwProfileWithHandledError(ctx, bmh, nodeName, a.Namespace, group.NodePoolData.HwProfile, false)
+	if err != nil {
+		return fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
+	}
+	a.Logger.InfoContext(ctx, "processed hw profile", slog.Bool("updating", updating))
+
+	// Mark BMH allocated
 	if err := a.markBMHAllocated(ctx, bmh); err != nil {
-		return fmt.Errorf("failed to add allocated label to node (%s): %w", nodeName, err)
+		return fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
 	}
 
-	nodepool.Status.Properties.NodeNames = append(nodepool.Status.Properties.NodeNames, nodeName)
-
+	// Update node status
 	bmhInterface := a.buildInterfacesFromBMH(nodepool, *bmh)
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodePoolData.ResourcePoolId,
@@ -46,18 +71,24 @@ func (a *Adaptor) allocateBMHToNodePool(ctx context.Context, bmh *metal3v1alpha1
 		},
 		Interfaces: bmhInterface,
 	}
-	updating, err := a.processHwProfile(ctx, bmh, group.NodePoolData.HwProfile, false)
-	if err != nil {
-		return err
-	}
-	a.Logger.InfoContext(ctx, "processed hw profile", slog.Bool("updating", updating))
 	if err := a.UpdateNodeStatus(ctx, nodeInfo, nodeName, group.NodePoolData.HwProfile, updating); err != nil {
 		return fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
 	}
+
 	if !updating {
 		if err := a.clearBMHNetworkData(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}); err != nil {
-			return fmt.Errorf("failed to clearBMHNetworkData bmh (%s/%s): %w", bmh.Name, bmh.Namespace, err)
+			return fmt.Errorf("failed to clear network data for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
 		}
+	}
+
+	// Update nodepool status
+	if !contains(nodepool.Status.Properties.NodeNames, nodeName) {
+		nodepool.Status.Properties.NodeNames = append(nodepool.Status.Properties.NodeNames, nodeName)
+	}
+
+	// Clean up annotation
+	if err := a.updateBMHMetaWithRetry(ctx, bmhName, "annotation", NodeNameAnnotation, "", OpRemove); err != nil {
+		a.Logger.ErrorContext(ctx, "failed to clear node name annotation from BMH", slog.Any("bmh", bmhName), slog.String("error", err.Error()))
 	}
 
 	return nil

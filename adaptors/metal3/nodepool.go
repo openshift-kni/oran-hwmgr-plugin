@@ -88,15 +88,16 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	var result ctrl.Result
 	full, err := a.CheckNodePoolProgress(ctx, hwmgr, nodepool)
 	if err != nil {
+		reason := hwmgmtv1alpha1.Failed
+		if typederrors.IsInputError(err) {
+			reason = hwmgmtv1alpha1.InvalidInput
+		}
 		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool, hwmgmtv1alpha1.Provisioned,
-			hwmgmtv1alpha1.Failed, metav1.ConditionFalse, err.Error()); err != nil {
+			reason, metav1.ConditionFalse, err.Error()); err != nil {
 			return utils.RequeueWithMediumInterval(),
 				fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
 		}
-		if !typederrors.IsInputError(err) {
-			return utils.DoNotRequeue(), fmt.Errorf("failed CheckNodePoolProgress: %w", err)
-		}
-		return utils.RequeueWithMediumInterval(), nil
+		return utils.DoNotRequeue(), fmt.Errorf("failed to check NodePool progress %s: %w", nodepool.Name, err)
 	}
 
 	if full {
@@ -110,6 +111,12 @@ func (a *Adaptor) HandleNodePoolProcessing(
 		result = utils.DoNotRequeue()
 	} else {
 		a.Logger.InfoContext(ctx, "NodePool request in progress")
+		if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress, metav1.ConditionFalse,
+			string(hwmgmtv1alpha1.AwaitConfig)); err != nil {
+			return utils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
+		}
 		result = utils.RequeueWithShortInterval()
 	}
 
@@ -183,7 +190,7 @@ func (a *Adaptor) handleInProgressUpdate(ctx context.Context, nodelist *hwmgmtv1
 		node.Status.HwProfile = node.Spec.HwProfile
 		utils.SetStatusCondition(&node.Status.Conditions,
 			string(hwmgmtv1alpha1.Configured),
-			string(hwmgmtv1alpha1.Completed),
+			string(hwmgmtv1alpha1.ConfigApplied),
 			metav1.ConditionTrue,
 			string(hwmgmtv1alpha1.ConfigSuccess))
 		if err := utils.UpdateK8sCRStatus(ctx, a.Client, node); err != nil {
@@ -204,7 +211,8 @@ func (a *Adaptor) handleInProgressUpdate(ctx context.Context, nodelist *hwmgmtv1
 
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 		a.Logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
-		if err := utils.SetNodeUpdatingStatus(ctx, a.Client, node.Name, node.Namespace, metav1.ConditionFalse,
+		if err := utils.SetNodeConditionStatus(ctx, a.Client, node.Name, node.Namespace,
+			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
 			a.Logger.ErrorContext(ctx, "failed to update node status", slog.String("node", node.Name), slog.String("error", err.Error()))
 		}
@@ -216,12 +224,12 @@ func (a *Adaptor) handleInProgressUpdate(ctx context.Context, nodelist *hwmgmtv1
 }
 
 // initiateNodeUpdate starts the update process for the given node by processing the new hardware profile,
-func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.Node, newHwProfile string,
-	nodepool *hwmgmtv1alpha1.NodePool) (ctrl.Result, error) {
+func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.Node,
+	newHwProfile string) (ctrl.Result, error) {
 
 	bmh, err := a.getBMHForNode(ctx, node)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 	}
 	a.Logger.InfoContext(ctx, "Issuing profile update to node",
 		slog.String("hwMgrNodeId", node.Spec.HwMgrNodeId),
@@ -230,8 +238,14 @@ func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.N
 
 	// Apply the pre-change annotation to the BMH.
 	if err := a.applyPreChangeAnnotation(ctx, bmh); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to apply pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
+		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to apply pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 	}
+
+	updateRequired, err := a.processHwProfileWithHandledError(ctx, bmh, node.Name, node.Namespace, newHwProfile, true)
+	if err != nil {
+		return utils.DoNotRequeue(), err
+	}
+	a.Logger.InfoContext(ctx, "Processed hardware profile", slog.Bool("updatedRequired", updateRequired))
 
 	// Copy the current node object for patching
 	patch := client.MergeFrom(node.DeepCopy())
@@ -243,27 +257,25 @@ func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.N
 		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to patch Node %s in namespace %s: %w", node.Name, node.Namespace, err)
 	}
 
-	updateRequired, err := a.processHwProfile(ctx, bmh, newHwProfile, true)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to process hardware profile for node %s: %w", node.Name, err)
-	}
-	a.Logger.InfoContext(ctx, "Processed hardware profile", slog.Bool("updatedRequired", updateRequired))
-
 	if updateRequired {
 		// Apply a pre-change annotation to the BMH.
 		if err := a.removeDetachedAnnotation(ctx, bmh); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove detached annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
-		if result, err := a.setAwaitConfigCondition(ctx, nodepool); err != nil {
-			return result, err
-		}
-		if err := utils.SetNodeUpdatingStatus(ctx, a.Client, node.Name, node.Namespace, metav1.ConditionFalse,
-			string(hwmgmtv1alpha1.InProgress), "Update Requested"); err != nil {
+
+		if err := utils.SetNodeConditionStatus(ctx, a.Client, node.Name, node.Namespace,
+			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
+			string(hwmgmtv1alpha1.ConfigUpdate), "Update Requested"); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update node status (%s): %w", node.Name, err)
 		}
 		// Return a medium interval requeue to allow time for the update to progress.
 		return utils.RequeueWithMediumInterval(), nil
 	} else {
+		if err := utils.SetNodeConditionStatus(ctx, a.Client, node.Name, node.Namespace,
+			string(hwmgmtv1alpha1.Configured), metav1.ConditionTrue,
+			string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
+			a.Logger.ErrorContext(ctx, "failed to update node status", slog.String("node", node.Name), slog.String("error", err.Error()))
+		}
 		// No update required, so we can remove the pre-change annotation
 		if err := a.removePreChangeAnnotation(ctx, bmh); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
@@ -275,13 +287,13 @@ func (a *Adaptor) initiateNodeUpdate(ctx context.Context, node *hwmgmtv1alpha1.N
 func (a *Adaptor) handleNodePoolConfiguring(
 	ctx context.Context,
 	nodepool *hwmgmtv1alpha1.NodePool,
-) (ctrl.Result, error) {
+) (ctrl.Result, *hwmgmtv1alpha1.NodeList, error) {
 
 	a.Logger.InfoContext(ctx, "Handling Node Pool Configuring")
 
 	nodelist, err := utils.GetChildNodes(ctx, a.Logger, a.Client, nodepool)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodepool.Name, err)
+		return ctrl.Result{}, nil, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodepool.Name, err)
 	}
 
 	// STEP 1: Look for the next node that requires an update.
@@ -294,22 +306,18 @@ func (a *Adaptor) handleNodePoolConfiguring(
 		}
 
 		// Initiate the update process for the selected node.
-		res, err := a.initiateNodeUpdate(ctx, node, newHwProfile, nodepool)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to initiate node update for node %s: %w", node.Name, err)
-		}
-		// Requeue after starting the update on one node.
-		return res, nil
+		res, err := a.initiateNodeUpdate(ctx, node, newHwProfile)
+		return res, nodelist, err
 	}
 
 	// STEP 2: Handle nodes in transition (from update-needed to update in-progress).
 	updating, err := a.handleTransitionNodes(ctx, nodelist, true)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error handling transitioning nodes: %w", err)
+		return ctrl.Result{}, nodelist, fmt.Errorf("error handling transitioning nodes: %w", err)
 	}
 	if updating {
 		// Return a short interval requeue to allow time for the transition
-		return utils.RequeueWithShortInterval(), nil
+		return utils.RequeueWithShortInterval(), nodelist, nil
 	}
 
 	// STEP 3: Process any node that is already in the update-in-progress state.
@@ -317,35 +325,18 @@ func (a *Adaptor) handleNodePoolConfiguring(
 	if err != nil {
 		if !handled {
 			a.Logger.InfoContext(ctx, "Not handled", slog.String("error", err.Error()))
-			if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
-				hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.Failed, metav1.ConditionFalse,
-				BmhServicingErr); err != nil {
-				a.Logger.InfoContext(ctx, "failed to update nodepool status", slog.String("error", err.Error()))
-				return utils.RequeueWithMediumInterval(),
-					fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
-			}
-			a.Logger.InfoContext(ctx, "updated nodepool status", slog.String("nodepool", nodepool.Name))
-			return utils.DoNotRequeue(), nil
+			return utils.DoNotRequeue(), nodelist, nil
 		}
-		return res, err
+		return res, nodelist, err
 	}
 	if handled {
-		return res, err
+		return res, nodelist, err
 	}
 
 	// STEP 4: If no nodes are pending updates, mark the NodePool as fully configured.
 	a.Logger.InfoContext(ctx, "All nodes have been updated to new profile")
-	if err := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
-		hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue,
-		string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
-		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update status for NodePool %s: %w", nodepool.Name, err)
-	}
 
-	if err := utils.UpdateNodePoolPluginStatus(ctx, a.Client, nodepool); err != nil {
-		return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
-	}
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, nodelist, nil
 }
 
 func (a *Adaptor) HandleNodePoolSpecChanged(
@@ -362,7 +353,30 @@ func (a *Adaptor) HandleNodePoolSpecChanged(
 			return result, err
 		}
 	}
-	return a.handleNodePoolConfiguring(ctx, nodepool)
+
+	result, nodelist, err := a.handleNodePoolConfiguring(ctx, nodepool)
+	if nodelist != nil {
+		status, reason, message := utils.DeriveNodePoolStatusFromNodes(ctx, a.NoncachedClient, a.Logger, nodelist)
+
+		if updateErr := utils.UpdateNodePoolStatusCondition(ctx, a.Client, nodepool,
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
+
+			a.Logger.ErrorContext(ctx, "Failed to update aggregated NodePool status",
+				slog.String("nodepool", nodepool.Name),
+				slog.String("error", updateErr.Error()))
+
+			if err == nil {
+				err = updateErr
+			}
+		}
+		if status == metav1.ConditionTrue && reason == string(hwmgmtv1alpha1.ConfigApplied) {
+			if err := utils.UpdateNodePoolPluginStatus(ctx, a.Client, nodepool); err != nil {
+				return utils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+			}
+		}
+	}
+
+	return result, err
 }
 
 func (a *Adaptor) setAwaitConfigCondition(
