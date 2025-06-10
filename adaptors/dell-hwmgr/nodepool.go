@@ -203,8 +203,8 @@ func (a *Adaptor) HandleNodePoolProcessing(
 
 	a.Logger.InfoContext(ctx, fmt.Sprintf("Validation complete for ResourceGroup %s with nodepool %s", *rg.Id, nodepool.Name))
 
-	var nodelist = hwmgmtv1alpha1.NodeList{}
-	if err := a.Client.List(ctx, &nodelist); err != nil {
+	nodelist, err := utils.GetNodeList(ctx, a.Client)
+	if err != nil {
 		a.Logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
 		return utils.RequeueWithMediumInterval(), fmt.Errorf("failed to query node list: %w", err)
 	}
@@ -212,7 +212,7 @@ func (a *Adaptor) HandleNodePoolProcessing(
 	// Create the Node CRs corresponding to the allocated resources
 	for nodegroupName, resourceSelector := range *rg.ResourceSelectors {
 		for _, node := range *resourceSelector.Resources {
-			nodename := utils.FindNodeInList(nodelist, nodepool.Spec.HwMgrId, *node.Id)
+			nodename := utils.FindNodeInList(*nodelist, nodepool.Spec.HwMgrId, *node.Id)
 			if nodename != "" {
 				// Node CR exists
 				if slices.Contains(nodepool.Status.Properties.NodeNames, nodename) {

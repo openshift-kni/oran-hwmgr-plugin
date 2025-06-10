@@ -572,6 +572,7 @@ func (a *Adaptor) handleTransitionNodes(ctx context.Context, nodelist *hwmgmtv1a
 
 func (a *Adaptor) addRebootAnnotation(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost) error {
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	a.Logger.InfoContext(ctx, "Triggering reboot of BMH", slog.String("bmh", bmh.Name))
 	if err := a.updateBMHMetaWithRetry(ctx, bmhName, "annotation", BmhRebootAnnotation, "", OpAdd); err != nil {
 		return fmt.Errorf("failed to add %s to BMH %+v: %w", BmhRebootAnnotation, bmhName, err)
 	}
