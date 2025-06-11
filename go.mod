@@ -19,7 +19,7 @@ require (
 	github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-00010101000000-000000000000
 	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250512185943-b6d9f68b2505
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
-	github.com/samber/lo v1.50.0
+	github.com/samber/lo v1.51.0
 	github.com/sethvargo/go-retry v0.3.0
 	golang.org/x/mod v0.23.0
 	golang.org/x/oauth2 v0.26.0
